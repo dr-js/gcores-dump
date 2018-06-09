@@ -1,0 +1,36 @@
+{
+  "private": true,
+  "name": "gcores-dump",
+  "version": "0.0.0",
+  "author": "dr-js",
+  "license": "MIT",
+  "description": "Offline first Gadio.",
+  "bin": "bin/index.js",
+  "scripts": {
+    "// script ======================": "",
+    "script-base": "babel-node ./script quiet",
+    "script-pack": "babel-node ./script quiet pack",
+    "script-publish": "babel-node ./script pack publish",
+    "script-publish-dev": "babel-node ./script pack publish-dev",
+    "script-generate-spec": "babel-node ./script/generateSpec",
+    "// build =======================": "",
+    "build-library": "babel ./source --out-dir ./output-gitignore/library",
+    "build-library-dev": "cross-env BABEL_ENV=dev npm run build-library -- --watch",
+    "build-static": "babel ./source-static --out-dir ./output-gitignore/static --copy-files",
+    "build-static-dev": "cross-env BABEL_ENV=dev npm run build-static -- --watch",
+    "// =============================": "",
+    "prepack": "echo \"Error: pack with script-*\" && exit 1"
+  },
+  "engines": {
+    "node": ">=8.8",
+    "npm": ">=6"
+  },
+  "dependencies": {
+    "dr-js": "0.15.2-dev.2",
+    "dr-server": "^0.0.13"
+  },
+  "devDependencies": {
+    "dev-dep-tool": "0.3.1-dev.0",
+    "dev-dep-web": "^0.3.0"
+  }
+}

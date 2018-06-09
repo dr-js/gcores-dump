@@ -1,0 +1,22 @@
+{
+  "version": "[package-name@package-version|generated-by-server]",
+  "resourceCacheKey": "resource-cache-version-1",
+  "defaultCacheData": {
+    "code-cache-version-1": [
+      "/",
+      "/favicon.ico",
+      "/s/logo/32.png",
+      "/s/logo/48.png",
+      "/s/logo/72.png",
+      "/s/logo/96.png",
+      "/s/logo/144.png",
+      "/s/logo/192.png",
+      "/s/logo/512.png",
+      "/s/font/index.css",
+      "/s/font/Material-Icons.woff2",
+      "/s/cache-config.json",
+      "/s/manifest.json"
+    ],
+    "resource-cache-version-1": [ ]
+  }
+}
