@@ -1,7 +1,14 @@
 const initAudioStore = () => {
   const {
     Audio,
-    Dr: { Common: { Math: { clamp }, Time: { createTimer }, Immutable: { StateStore: { createStateStore } } } }
+    Dr: {
+      Common: {
+        Math: { clamp },
+        Function: { createInsideOutPromise },
+        Time: { createTimer },
+        Immutable: { StateStore: { createStateStore } }
+      }
+    }
   } = window
 
   const initialState = {
@@ -62,6 +69,14 @@ const initAudioStore = () => {
       element.currentTime = currentTime
       setState({ currentTime: currentTime })
     }
+    const getLoadPromise = async () => {
+      if (getState().duration) return
+      const { promise, resolve } = createInsideOutPromise()
+      subscribe(({ duration }) => duration && resolve())
+      setTimeout(resolve, 1000) // 10sec, just not waiting too long (mobile may be slow for big audio files)
+      await promise
+      unsubscribe(resolve)
+    }
 
     return {
       subscribe, // should reduce listener code since tick for currentTime will be called very often
@@ -71,7 +86,8 @@ const initAudioStore = () => {
       play,
       pause,
       setSourceUrl,
-      setTime
+      setTime,
+      getLoadPromise
     }
   }
 

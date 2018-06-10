@@ -1,8 +1,6 @@
 const renderStyle = `<style>
 body { font-family: 'Open Sans','Helvetica Neue',Arial,'Hiragino Sans GB','Microsoft YaHei','WenQuanYi Micro Hei',sans-serif; }
 
-.material-icon { font-family: 'Material Icons'; font-size: 22px; }
-
 .flex-row { display: flex; flex-flow: row; }
 .flex-column { display: flex; flex-flow: column; }
 .flex-center { display: flex; align-items: center; justify-content: center; }
@@ -79,7 +77,7 @@ const initRender = ({
       Common: {
         Format,
         Error: { catchSync },
-        Function: { lossyAsync, createInsideOutPromise },
+        Function: { lossyAsync },
         Math: { clamp },
         Immutable: { transformCache, Array: { arrayMatchPush, arrayMatchDelete } }
       },
@@ -89,8 +87,8 @@ const initRender = ({
 
   const createFlexDiv = () => cE('div', { style: 'flex: 1;' })
   const createFlexRow = (...args) => cE('div', { className: 'flex-row' }, args)
-  const createIconButton = (icon, extra = {}) => cE('button', { className: 'material-icon', innerText: icon, ...extra })
-  const createIcon = (icon) => cE('div', { className: 'material-icon', innerText: icon })
+  const createIconButton = (icon, extra = {}) => cE('button', { className: 'material-icons', innerText: icon, ...extra })
+  const createIcon = (icon) => cE('div', { className: 'material-icons', innerText: icon })
 
   // ==================================================================================================================
   // ==================================================================================================================
@@ -133,7 +131,8 @@ const initRender = ({
       ]))
     }
 
-    updateControlPanel({})
+    updateControlPanel()
+    updatePlayerLocate({})
   }
   const getAudioCacheUrl = (url) => `${location.origin}${AUDIO_PATH_FETCH_URL}${encodeURIComponent(url)}.json`
   const withEnhancedAudioList = (audioList, urlList, getData, func) => func(
@@ -206,12 +205,6 @@ const initRender = ({
       ])
     ]))
 
-    const setAudioTime = lossyAsync(async (time) => {
-      await loadAudio(radioUrl)
-      audioStore.setTime(time)
-      audioStore.play()
-    }).trigger
-
     const timelineDivList = [ /* { radioTimeline, element } */ ]
     for (const radioTimeline of radioTimelineList) {
       const { time, imageUrl, title, content, linkUrl } = radioTimeline
@@ -228,7 +221,8 @@ const initRender = ({
           createFlexRow(
             createFlexDiv(),
             linkUrl && createIconButton('open_in_new', { onclick: () => open(linkUrl) }),
-            createIconButton('play_arrow', { onclick: () => setAudioTime(time) })
+            // createIconButton('play_arrow', { onclick: () => setAudio(time) })
+            createIconButton('play_arrow', { onclick: () => openAudioPanel({ radioUrl, time, locateTimeline }) })
           )
         ])
       ]))
@@ -245,9 +239,16 @@ const initRender = ({
       }
     }
 
-    radioUrl !== audioStore.getState().info && openAudioPanel(radioUrl, locateTimeline)
+    // const setAudio = (time = undefined) => {
+    //   if (radioUrl !== audioStore.getState().info) return openAudioPanel({ radioUrl, time, locateTimeline })
+    //   if (time !== undefined) audioStore.setTime(time)
+    //   updatePlayerLocate({ locateTimeline })
+    // }
 
-    updateControlPanel({ locateTimeline })
+    // setAudio()
+    openAudioPanel({ radioUrl, locateTimeline })
+
+    updateControlPanel()
   }
 
   // ==================================================================================================================
@@ -271,7 +272,7 @@ const initRender = ({
     filterList.length && setAudioListFilter({ type: 'filter', filterList })
   }
 
-  const updateControlPanel = ({ locateTimeline = null }) => {
+  const updateControlPanel = () => {
     const { audioListState: { audioListFilter }, currentPanel, isAudioListMinimize, audioCacheSizeMap, audioCacheStarList } = mainStore.getState()
     const styleDisplayAudioList = styleDisplay(currentPanel === 'audio-list')
     const styleDisplayAudio = styleDisplay(currentPanel === 'audio')
@@ -289,12 +290,6 @@ const initRender = ({
     qS('#control-minimize').innerHTML = isAudioListMinimize ? 'flip_to_back' : 'flip_to_front'
     qS('#control-minimize').style.display = styleDisplayAudioList
     qS('#control-to-audio-list').style.display = styleDisplayAudio
-
-    const playerLocate = qS('#player-locate')
-    if (playerLocate) {
-      playerLocate.innerHTML = locateTimeline ? 'my_location' : 'playlist_play'
-      playerLocate.onclick = locateTimeline || (() => switchToAudio(getAudioCacheUrl(mainStore.getState().audioState.url)))
-    }
 
     updateStorageStatus()
   }
@@ -315,22 +310,28 @@ const initRender = ({
   // ==================================================================================================================
 
   const renderSubControlPanel = () => {
-    const subControlPanel = qS('#sub-control-panel', '')
-    if (!audioStore.getState().sourceUrl) return
+    __DEV__ && console.log(`[renderSubControlPanel] sourceUrl`, audioStore.getState().sourceUrl)
+    if (!audioStore.getState().sourceUrl) return qS('#sub-control-panel', '')
 
     const { audioState: { title, imageUrl } } = mainStore.getState()
 
-    aCL(subControlPanel, [
+    if (qS('.player-info-title')) { // fast reset
+      qS('.player-info-title').innerText = title
+      qS('.player-image').src = imageUrl
+      return
+    }
+
+    aCL(qS('#sub-control-panel', ''), [
       cE('div', { className: 'player-slider' }, [ cE('div', { className: 'player-slider-thumb' }) ]),
       cE('div', { className: 'player-main flex-row' }, [
         cE('img', { className: 'player-image', src: imageUrl }),
         cE('div', { className: 'player-info' }, [
           createFlexDiv(),
           cE('b', { className: 'player-info-title', innerText: title }),
-          cE('p', { className: 'player-progress' }),
+          cE('p', { className: 'player-progress', innerText: '--/--' }),
           createFlexRow(
             createFlexDiv(),
-            createIconButton('', { id: 'player-control-play' }),
+            createIconButton('more_horiz', { id: 'player-control-play' }),
             createIconButton('', { id: 'player-locate' }),
             createIconButton('close', { onclick: () => { closeAudioPanel() } }),
             createFlexDiv()
@@ -394,6 +395,13 @@ const initRender = ({
       progress.innerText = `${Format.mediaTime(currentTime)}/${Format.mediaTime(duration)}`
     }
   })
+  const updatePlayerLocate = ({ locateTimeline = null }) => {
+    const playerLocate = qS('#player-locate')
+    __DEV__ && console.log(`[updatePlayerLocate] playerLocate`, Boolean(playerLocate), 'locateTimeline', Boolean(locateTimeline))
+    if (!playerLocate) return
+    playerLocate.innerHTML = locateTimeline ? 'my_location' : 'playlist_play'
+    playerLocate.onclick = locateTimeline || (() => switchToAudio(getAudioCacheUrl(mainStore.getState().audioState.url)))
+  }
 
   const switchToAudioList = () => { mainStore.setCurrentPanel('audio-list') }
   const setAudioListFilter = (audioListFilter) => { mainStore.updateAudioListState({ audioListFilter }) }
@@ -404,30 +412,28 @@ const initRender = ({
     mainStore.setCurrentPanel('audio')
   }).trigger
 
-  const loadAudio = async (radioUrl) => {
-    __DEV__ && console.log('[loadAudio]', radioUrl)
-    if (radioUrl === audioStore.getState().info) return
-    try {
-      const audioBlob = await cacheStore.getBlobByUrl(radioUrl)
-      const objectUrl = URL.createObjectURL(audioBlob)
-      audioStore.setSourceUrl(objectUrl, radioUrl)
-    } catch (error) {
-      __DEV__ && console.warn('[loadAudio] use radioUrl directly, failed to get objectUrl from radioUrl:', radioUrl, error)
-      audioStore.setSourceUrl(radioUrl, radioUrl)
+  const openAudioPanel = lossyAsync(async ({ radioUrl, time, locateTimeline }) => {
+    if (radioUrl !== audioStore.getState().info) {
+      __DEV__ && console.log('[loadAudio]', radioUrl)
+      try {
+        const audioBlob = await cacheStore.getBlobByUrl(radioUrl)
+        const objectUrl = URL.createObjectURL(audioBlob)
+        audioStore.setSourceUrl(objectUrl, radioUrl)
+      } catch (error) {
+        __DEV__ && console.warn('[loadAudio] use radioUrl directly, failed to get objectUrl from radioUrl:', radioUrl, error)
+        audioStore.setSourceUrl(radioUrl, radioUrl)
+      }
+      audioStore.play()
     }
-    const { promise, resolve } = createInsideOutPromise()
-    audioStore.subscribe(({ info }) => radioUrl === info && resolve())
-    setTimeout(resolve, 1000) // just not waiting
-    await promise
-    audioStore.unsubscribe(resolve)
-  }
-  const openAudioPanel = lossyAsync(async (radioUrl, locateTimeline) => {
-    await loadAudio(radioUrl)
-    audioStore.play()
-    updateControlPanel({ locateTimeline })
+    if (time !== undefined) {
+      await audioStore.getLoadPromise()
+      audioStore.setTime(time)
+    }
+    renderSubControlPanel()
+    updatePlayerLocate({ locateTimeline })
   }).trigger
 
-  return { renderAudioList, renderAudio, renderControlPanel, renderSubControlPanel, setFilterDownload, setFilterStar, setFilterTime, updateControlConfig }
+  return { renderAudioList, renderAudio, renderControlPanel, setFilterDownload, setFilterStar, setFilterTime, updateControlConfig }
 }
 
 const initRenderStatus = ({ mainStore, T }) => {
