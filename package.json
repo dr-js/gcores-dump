@@ -1,10 +1,11 @@
 {
   "private": true,
   "name": "gcores-dump",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "author": "dr-js",
   "license": "MIT",
   "description": "Offline first Gadio.",
+  "repository": "github:dr-js/gcores-dump",
   "bin": "bin/index.js",
   "scripts": {
     "// script ======================": "",

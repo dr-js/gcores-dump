@@ -17,10 +17,10 @@ body { font-family: 'Open Sans','Helvetica Neue',Arial,'Hiragino Sans GB','Micro
 
 .control-panel-audio-list { display: flex; flex-flow: row wrap; align-content: start; justify-content: center; padding: 12px 4px; }
 
-.audio-list-item { position: relative; margin: 8px; height: 180px; max-width: 90vw; width: 360px; }
+.audio-list-item { position: relative; margin: 8px; height: 180px; max-width: 90vw; width: 340px; }
 .audio-list-image,
-.audio-list-info  { position: absolute; max-width: 85vw; width: 340px; border-radius: 4px; }
-.audio-list-image { left: 0; top: 0; max-height: 160px; box-shadow: 0 0 2px 0 #666; }
+.audio-list-info  { position: absolute; max-width: 85vw; width: 320px; max-height: 180px; border-radius: 4px; }
+.audio-list-image { left: 0; top: 0; box-shadow: 0 0 2px 0 #666; }
 .audio-list-info { right: 0; bottom: 0; display: flex; flex-flow: column; align-items: stretch; padding: 2px 4px; height: 160px; background: linear-gradient(120deg, rgba(255, 255, 255, 0.8), #fff); box-shadow: 0 0 2px 0 #666, inset 0 0 32px 0 #fff; text-align: right; }
 .audio-list-info.minimize { width: auto; height: auto; }
 
