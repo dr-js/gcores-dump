@@ -36,12 +36,7 @@ const processOutput = async ({ packageJSON, logger }) => {
   ].filter((path) => path.endsWith('.js') && !path.endsWith('.test.js'))
 
   padLog(`minify output`)
-  let sizeCodeReduceModule = await minifyFileListWithUglifyEs({
-    fileList,
-    option: getUglifyESOption({ isModule: true }),
-    rootPath: PATH_OUTPUT,
-    logger
-  })
+  let sizeCodeReduceModule = await minifyFileListWithUglifyEs({ fileList, option: getUglifyESOption({}), rootPath: PATH_OUTPUT, logger })
 
   log(`process output`)
   const processBabel = wrapFileProcessor({ processor: fileProcessorBabel, logger })

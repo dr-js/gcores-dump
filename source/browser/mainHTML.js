@@ -7,8 +7,9 @@ import { initAudioStore } from './script/audioStore'
 import { initRender, initRenderStatus, initCacheOperation, renderStyle, renderHTML } from './script/render'
 
 const getHTML = ({ envObject, FAVICON_URL, MANIFEST_URL, CSS_URL, FONT_URL }) => COMMON_LAYOUT([
-  `<meta name="theme-color" content="#ffffff">`,
   `<title>G-core Dump</title>`,
+  `<meta name="theme-color" content="#ffffff">`,
+  `<meta name="description" content="Offline first Gadio.">`,
   `<link rel="shortcut icon" href="${FAVICON_URL}">`,
   `<link rel="manifest" href="${MANIFEST_URL}">`,
   `<link rel="stylesheet" href="${CSS_URL}" />`,
