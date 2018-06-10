@@ -468,7 +468,7 @@ const initRenderStatus = ({ mainStore, T }) => {
   const updateStorageStatus = () => {
     const { storageStatus: { value, max } } = mainStore.getState()
     const storageStatusText = qS('#storage-status')
-    if (storageStatusText) storageStatusText.innerText = max ? `${Format.binary(value)}B` : `~${Format.binary(value)}B`
+    if (storageStatusText) storageStatusText.innerText = __DEV__ ? `${Format.binary(value)}B/${Format.binary(max)}B` : `${Format.binary(value)}B`
   }
 
   return { renderLoading, withLoading, updateLoadingStatus, updateStorageStatus }
