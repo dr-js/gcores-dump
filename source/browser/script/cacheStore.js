@@ -72,6 +72,10 @@ const initCacheStore = (cacheName) => {
         return cacheInfo
       }
     }
+    const getResponseByUrl = async (url) => {
+      url = normalizeUrl(url)
+      return cache.match(url)
+    }
     const getBlobByUrl = async (url) => {
       url = normalizeUrl(url)
       const response = await cache.match(url)
@@ -105,6 +109,7 @@ const initCacheStore = (cacheName) => {
       hasUrl,
       getInfoByUrl,
       addByUrl,
+      getResponseByUrl,
       getBlobByUrl,
       getJsonByUrl,
       deleteByUrl

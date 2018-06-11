@@ -20,18 +20,23 @@ const getHTML = ({ envObject, FAVICON_URL, MANIFEST_URL, CSS_URL, FONT_URL }) =>
   renderHTML,
   COMMON_SCRIPT({ ...envObject, initI18N, initMainStore, initCacheStore, initAudioStore, initRender, initRenderStatus, initCacheOperation, onload: onLoadFunc }),
   DR_BROWSER_SCRIPT(),
-  `<script>qS('#main-panel', 'Script loading...<br />' + navigator.userAgent)</script>`
+  `<script>qS('#main-panel', 'Script loading…<br />代码加载中…<br />' + navigator.userAgent)</script>`
 ])
 
 // TODO: pull out this service worker init step
 
+// TODO: add router & support back button
+// TODO: add fullscreen modal popup (setting, search)
+// TODO: add keyboard shortcuts (play/pause)
+
 const onLoadFunc = async () => {
   const {
-    alert, confirm, fetch, location, navigator, localStorage, MessageChannel,
-    CACHE_CONFIG_URL, SERVICE_WORKER_URL,
-    qS, initI18N, initMainStore, initCacheStore, initAudioStore, initRender, initRenderStatus, initCacheOperation,
+    alert, confirm, fetch, location, navigator, localStorage, MessageChannel, Request,
+    SERVICE_WORKER_URL, CACHE_CONFIG_URL, AUDIO_LIST_FETCH_URL,
+    qS, cE,
+    initI18N, initMainStore, initCacheStore, initAudioStore, initRender, initRenderStatus, initCacheOperation,
     Dr: {
-      Common: { Function: { debounce } },
+      Common: { Error: { catchAsync }, Function: { debounce } },
       Browser: { Module: { StateStorage: { createSyncStateStorage } } }
     }
   } = window
@@ -99,11 +104,20 @@ const onLoadFunc = async () => {
     mainStateStorage.save(toStorageState(state))
   }))
 
-  const { renderLoading, withLoading, updateLoadingStatus, updateStorageStatus } = initRenderStatus({ mainStore, T })
+  const { renderLoading, withLoading, updateLoadingStatus, asyncRenderModal, updateStorageStatus } = initRenderStatus({ mainStore, T })
   const { cacheAudioList, deleteAudioList, cacheAudio, deleteAudio } = initCacheOperation({ cacheStore, mainStore, T, updateLoadingStatus })
   const { renderAudioList, renderAudio, renderControlPanel, setFilterDownload, setFilterStar, setFilterTime, updateControlConfig } = initRender({
-    audioStore, cacheStore, mainStore, T, resetCode, resetAll, withLoading, updateStorageStatus, cacheAudio, deleteAudio
+    audioStore, cacheStore, mainStore, T, resetCode, resetAll, withLoading, updateStorageStatus, asyncRenderModal, cacheAudio, deleteAudio
   })
+
+  { // test AUDIO_LIST_FETCH_URL cache as first time open
+    const { result } = await catchAsync(cacheStore.getResponseByUrl, new Request(AUDIO_LIST_FETCH_URL).url)
+    !result && await asyncRenderModal((resolve) => [
+      cE('div', { className: 'margin', innerText: T('message-welcome') }),
+      cE('div', { className: 'margin', innerText: T('message-cache-audio-list') }),
+      cE('button', { innerText: T('text-start-cache'), onclick: resolve })
+    ])
+  }
 
   qS('#main-panel', T('step-cache-audio-list'))
   mainStore.updateAudioListState({ audioList: await withLoading(cacheAudioList) })

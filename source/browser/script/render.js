@@ -1,13 +1,18 @@
 const renderStyle = `<style>
 body { font-family: 'Open Sans','Helvetica Neue',Arial,'Hiragino Sans GB','Microsoft YaHei','WenQuanYi Micro Hei',sans-serif; }
 
-.flex-row { display: flex; flex-flow: row; }
-.flex-column { display: flex; flex-flow: column; }
-.flex-center { display: flex; align-items: center; justify-content: center; }
+.margin { margin: 4px; }
+.flex-row { display: flex; flex-flow: row; align-items: center; }
+.flex-column { display: flex; flex-flow: column; justify-content: center; }
 
-#loading { position: absolute; top: 0; left: 0; display: flex; flex-flow: column; align-items: center; justify-content: center; width: 100vw; height: 100vh; opacity: 0; z-index: 256; transition: opacity 1s ease; }
-#loading-status { min-width: 180px; white-space: pre-wrap; text-align: center; box-shadow: 0 0 2px 0 #666; z-index: 1; }
-#loading-mask { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: #eee; opacity: 0.5; }
+.main-initial { display: flex; flex-flow: column; align-items: center; justify-content: center; }
+
+#loading, #modal { position: absolute; top: 0; left: 0; display: flex; flex-flow: column; align-items: center; justify-content: center; width: 100vw; height: 100vh; }
+#loading-main, #modal-main { padding: 4px; max-width: 90vw; min-width: 180px; border-radius: 4px; white-space: pre-wrap; text-align: center; background: #fff; box-shadow: 0 0 2px 0 #666; z-index: 1; }
+#loading-mask, #modal-mask { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: #eee; opacity: 0.5; }
+
+#loading { opacity: 0; z-index: 256; transition: opacity 1s ease; }
+#modal { z-index: 128; }
 
 #control-sort-download,
 #control-sort-star,
@@ -51,7 +56,7 @@ body { font-family: 'Open Sans','Helvetica Neue',Arial,'Hiragino Sans GB','Micro
 
 const renderHTML = [
   `<div id="control-panel" style="overflow: hidden; display: flex; flex-flow: row nowrap; box-shadow: 0 0 12px 0 #666; z-index: 1;"></div>`,
-  `<div id="main-panel" class="flex-center" style="overflow: auto; flex: 1; min-height: 0;">No script yet...</div>`,
+  `<div id="main-panel" class="main-initial" style="overflow: auto; flex: 1; min-height: 0;">No script yet…<br />未加载代码…</div>`,
   `<div id="sub-control-panel" style="overflow: visible; position: relative; display: flex; flex-flow: column nowrap; background: #eee; box-shadow: 0 0 12px 0 #666; z-index: 1;"></div>`
 ].join('\n')
 
@@ -59,20 +64,12 @@ const initRender = ({
   audioStore, cacheStore, mainStore,
   T,
   resetCode, resetAll,
-  withLoading, updateStorageStatus,
+  withLoading, updateStorageStatus, asyncRenderModal,
   cacheAudio, deleteAudio
 }) => {
   const {
-    prompt,
-    open,
-    location,
-    URL,
-    AUDIO_PATH_FETCH_URL,
-    qS,
-    cE,
-    aCL,
-    mECN,
-    mEA,
+    open, location, URL, AUDIO_PATH_FETCH_URL,
+    qS, cE, aCL, mECN, mEA,
     Dr: {
       Common: {
         Format,
@@ -111,15 +108,15 @@ const initRender = ({
         cE('img', { className: 'audio-list-image', src: imageUrl }),
         cE('div', { className: !isAudioListMinimize ? 'audio-list-info' : 'audio-list-info minimize' }, [
           !isAudioListMinimize && createFlexRow(
-            cE('div', { className: 'flex-center', innerText: time }),
+            cE('div', { className: 'flex-row', innerText: time }),
             createFlexDiv(),
-            cE('div', { className: 'flex-center', innerText: tag })
+            cE('div', { className: 'flex-row', innerText: tag })
           ),
           !isAudioListMinimize && cE('div', { className: 'audio-list-info-title', innerText: title }),
           !isAudioListMinimize && cE('div', { className: 'audio-list-info-title-secondary', innerText: titleSecondary }),
           createFlexRow(
             createFlexDiv(),
-            cacheSize && cE('div', { className: 'flex-center', innerText: `${Format.binary(cacheSize)}B` }),
+            cacheSize && cE('div', { className: 'flex-row', innerText: `${Format.binary(cacheSize)}B` }),
             !cacheSize && createIconButton('cloud_download', { onclick: () => withLoading(cacheAudio, audioCacheUrl) }),
             cacheSize && createIconButton('play_arrow', { onclick: () => switchToAudio(audioCacheUrl) }),
             cacheSize && createIconButton('delete', { onclick: () => withLoading(deleteAudio, audioCacheUrl) }),
@@ -221,7 +218,6 @@ const initRender = ({
           createFlexRow(
             createFlexDiv(),
             linkUrl && createIconButton('open_in_new', { onclick: () => open(linkUrl) }),
-            // createIconButton('play_arrow', { onclick: () => setAudio(time) })
             createIconButton('play_arrow', { onclick: () => openAudioPanel({ radioUrl, time, locateTimeline }) })
           )
         ])
@@ -239,13 +235,6 @@ const initRender = ({
       }
     }
 
-    // const setAudio = (time = undefined) => {
-    //   if (radioUrl !== audioStore.getState().info) return openAudioPanel({ radioUrl, time, locateTimeline })
-    //   if (time !== undefined) audioStore.setTime(time)
-    //   updatePlayerLocate({ locateTimeline })
-    // }
-
-    // setAudio()
     openAudioPanel({ radioUrl, locateTimeline })
 
     updateControlPanel()
@@ -262,15 +251,23 @@ const initRender = ({
     createIconButton('', { id: 'control-minimize', onclick: mainStore.toggleAudioListMinimize }),
     createIconButton('arrow_back', { id: 'control-to-audio-list', onclick: switchToAudioList }),
     createFlexDiv(),
-    cE('div', { id: 'control-storage-status', className: 'button', disabled: true }, [ createIcon('archive'), cE('div', { id: 'storage-status' }) ])
+    cE('button', { id: 'control-storage-status', onclick: () => renderConfigModal({}) }, [ createIcon('settings'), cE('div', { id: 'storage-status' }) ])
   ])
   const setFilterStar = () => setAudioListFilter({ type: 'star' })
   const setFilterDownload = () => setAudioListFilter({ type: 'download' })
   const setFilterTime = () => setAudioListFilter({ type: 'time' })
-  const setFilterFilter = () => {
-    const filterList = (prompt(T('message-enter-filter')) || '').toLowerCase().split(/[\s'"-,.，。]/).filter(Boolean)
+  const setFilterFilter = lossyAsync(() => asyncRenderModal((resolve) => [
+    cE('label', { for: 'filter-input', className: 'margin', innerText: T('message-enter-filter') }),
+    cE('input', { id: 'filter-input', className: 'margin' }),
+    createFlexRow(
+      createFlexDiv(),
+      createIconButton('search', { onclick: () => resolve(qS('#filter-input').value) }),
+      createIconButton('clear', { onclick: resolve })
+    )
+  ], (filterText) => {
+    const filterList = (filterText || '').toLowerCase().split(/[\s'"-,.，。]/).filter(Boolean)
     filterList.length && setAudioListFilter({ type: 'filter', filterList })
-  }
+  })).trigger
 
   const updateControlPanel = () => {
     const { audioListState: { audioListFilter }, currentPanel, isAudioListMinimize, audioCacheSizeMap, audioCacheStarList } = mainStore.getState()
@@ -298,13 +295,36 @@ const initRender = ({
   const updateControlConfig = ({ hasController = false, hasUpdate = false }) => {
     const storageStatus = qS('#control-storage-status')
     if (storageStatus) {
-      mECN(qS('#control-storage-status'), hasUpdate, 'select')
-      storageStatus.children[ 0 ].innerHTML = hasUpdate ? 'new_releases' : 'archive'
-      storageStatus.onclick = hasController ? (event) => { event.preventDefault() || resetCode() } : null
-      storageStatus.oncontextmenu = hasController ? (event) => { event.preventDefault() || resetAll() } : null
-      mEA(storageStatus, !hasController, 'disabled')
+      mECN(storageStatus, hasUpdate, 'select')
+      storageStatus.onclick = () => renderConfigModal({ hasController, hasUpdate })
+      storageStatus.children[ 0 ].innerHTML = hasUpdate ? 'new_releases' : 'settings'
     }
   }
+  const renderConfigModal = lossyAsync(({ hasController, hasUpdate }) => asyncRenderModal((resolve) => {
+    const { storageStatus: { value, max } } = mainStore.getState()
+    return [
+      cE('h3', { className: 'margin', innerText: T('text-gcores-dump') }),
+      createFlexRow(
+        cE('p', { className: 'margin', innerText: `${T('text-storage-status')}:` }),
+        createFlexDiv(),
+        cE('b', { className: 'margin', innerText: max ? `${Format.binary(value)}B/${Format.binary(max)}B` : `${Format.binary(value)}B` })
+      ),
+      createFlexRow(
+        createIconButton('open_in_new', { onclick: () => { open('https://www.g-cores.com') } }),
+        cE('div', { innerText: T('text-official-link') })
+      ),
+      createFlexRow(
+        createIconButton('open_in_new', { onclick: () => { open('https://www.g-cores.com/articles/99114') } }),
+        cE('div', { innerText: T('text-article-link') })
+      ),
+      createFlexRow(
+        createFlexDiv(),
+        createIconButton(hasUpdate ? 'new_releases' : 'autorenew', { onclick: resetCode, disabled: !hasController }),
+        createIconButton('delete_forever', { onclick: resetAll, disabled: !hasController }),
+        createIconButton('clear', { onclick: resolve })
+      )
+    ]
+  })).trigger
 
   // ==================================================================================================================
   // ==================================================================================================================
@@ -437,41 +457,57 @@ const initRender = ({
 }
 
 const initRenderStatus = ({ mainStore, T }) => {
-  const { qS, cE, Dr: { Common: { Format, Error: { catchAsync } } } } = window
+  const { qS, cE, aCL, Dr: { Common: { Format, Error: { catchAsync }, Function: { createInsideOutPromise } } } } = window
 
   const renderLoading = (isLoading) => {
     if (!isLoading) return qS('#loading') && qS('#loading').remove()
     !qS('#loading') && document.body.appendChild(cE('div', { id: 'loading' }, [
-      cE('div', { id: 'loading-status', className: 'button', innerText: T('text-loading') }),
+      cE('div', { id: 'loading-main', innerText: T('text-loading') }),
       cE('div', { id: 'loading-mask' })
     ]))
     setTimeout(() => { if (qS('#loading')) qS('#loading').style.opacity = 1 }, 200)
   }
-
   const withLoading = async (func, ...args) => {
     renderLoading(true)
     const { result, error } = await catchAsync(func, ...args)
     renderLoading(false)
-    if (error) throw error
-    return result
+    if (error) { throw error } else return result
   }
-
   const stringShorten = (string = '') => string.length > 48
     ? `${string.slice(0, 16)}...${string.slice(-16)}`
     : string
-
   const updateLoadingStatus = (operation, subject, current, total, size) => {
-    const loadingStatus = qS('#loading-status')
-    if (loadingStatus) loadingStatus.innerText = `[${current}/${total} - ${Format.binary(size)}B]\n${operation}\n${stringShorten(subject)}`
+    const loadingMain = qS('#loading-main')
+    if (loadingMain) loadingMain.innerText = `[${current}/${total} - ${Format.binary(size)}B]\n${operation}\n${stringShorten(subject)}`
   }
+
+  const renderModal = (isModal) => {
+    if (!isModal) return qS('#modal') && qS('#modal').remove()
+    !qS('#modal') && document.body.appendChild(cE('div', { id: 'modal' }, [
+      cE('div', { id: 'modal-main', className: 'flex-column' }),
+      cE('div', { id: 'modal-mask' })
+    ]))
+  }
+  const withModal = async (func, ...args) => {
+    renderModal(true)
+    const { result, error } = await catchAsync(func, ...args)
+    renderModal(false)
+    if (error) { throw error } else return result
+  }
+  const updateModalMain = (elementList = []) => { qS('#modal-main') && aCL(qS('#modal-main'), elementList) }
+  const asyncRenderModal = (getElementList, onResolve = () => {}) => withModal(async () => {
+    const { promise, resolve } = createInsideOutPromise()
+    updateModalMain(await getElementList(resolve))
+    return onResolve(await promise)
+  })
 
   const updateStorageStatus = () => {
-    const { storageStatus: { value, max } } = mainStore.getState()
-    const storageStatusText = qS('#storage-status')
-    if (storageStatusText) storageStatusText.innerText = __DEV__ ? `${Format.binary(value)}B/${Format.binary(max)}B` : `${Format.binary(value)}B`
+    if (!qS('#storage-status')) return
+    const { storageStatus: { value } } = mainStore.getState()
+    qS('#storage-status').innerText = `${Format.binary(value)}B`
   }
 
-  return { renderLoading, withLoading, updateLoadingStatus, updateStorageStatus }
+  return { renderLoading, withLoading, updateLoadingStatus, asyncRenderModal, updateStorageStatus }
 }
 
 const initCacheOperation = ({ cacheStore, mainStore, T, updateLoadingStatus }) => {
@@ -490,7 +526,7 @@ const initCacheOperation = ({ cacheStore, mainStore, T, updateLoadingStatus }) =
   }
 
   const cacheAudioList = async () => {
-    const audioList = await cacheFetchJSON(AUDIO_LIST_FETCH_URL, { type: 'audio-list-info' })
+    const audioList = await cacheFetchJSON(AUDIO_LIST_FETCH_URL, { type: 'audio-list-info' }).catch((error) => alert(`${T('message-cache-audio-list-failed')}\n${error}`))
     let sumSize = 0
     for (let index = 0, indexMax = audioList.length; index < indexMax; index++) {
       const { imageUrl } = audioList[ index ]

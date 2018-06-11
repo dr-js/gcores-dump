@@ -28,6 +28,7 @@ const initMainStore = () => {
     audioCacheStarList: [ /* audioCacheUrl */ ],
     audioCacheSizeMap: { /* [audioCacheUrl]: size */ },
     storageStatus: { value: 0, max: 0 }
+    // playerStatus: { audioCacheUrl: '', time: 0 } // TODO: maybe save last player time
   }
 
   const createMainStore = (state = initialState) => {
@@ -84,15 +85,9 @@ const initMainStore = () => {
   }
 
   const toStorageState = ({
-    isAudioListMinimize,
-    isPlayerMinimize,
-    audioCacheSizeMap,
-    audioCacheStarList
+    isAudioListMinimize, isPlayerMinimize, audioCacheSizeMap, audioCacheStarList
   }) => ({
-    isAudioListMinimize,
-    isPlayerMinimize,
-    audioCacheSizeMap,
-    audioCacheStarList
+    isAudioListMinimize, isPlayerMinimize, audioCacheSizeMap, audioCacheStarList
   })
 
   return {

@@ -1,7 +1,7 @@
 {
   "private": true,
   "name": "gcores-dump",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "author": "dr-js",
   "license": "MIT",
   "description": "Offline first Gadio.",
@@ -27,7 +27,7 @@
     "npm": ">=6"
   },
   "dependencies": {
-    "dr-js": "0.15.2-dev.3",
+    "dr-js": "0.15.2-dev.4",
     "dr-server": "^0.0.13"
   },
   "devDependencies": {
