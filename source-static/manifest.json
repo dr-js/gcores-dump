@@ -1,6 +1,6 @@
 {
   "name": "G-cores Dump",
-  "short_name": "G-cores Dump",
+  "short_name": "GcoresDump",
   "display": "standalone",
   "start_url": "/",
   "theme_color": "#ffffff",

@@ -29,11 +29,10 @@ const runServer = async (hostname, { getOptionOptional, getSingleOption, getSing
     prefixLogFile: getSingleOptionOptional('prefix-log-file')
   })
 
-  const version = `${packageName}@${packageVersion}`
   const fileGcoresDumpList = getOptionOptional('file-gcores-dump') || []
   const pathPreparedStatic = getSingleOptionOptional('path-prepared-static')
 
-  await prepareAudioDumpJSON({ fileGcoresDumpList, pathPreparedStatic, version, logger })
+  await prepareAudioDumpJSON({ fileGcoresDumpList, pathPreparedStatic, packageName, packageVersion, logger })
   if (fileGcoresDumpList.length) {
     logger.add(`[PREPARE] done loading Gcores Dump, exiting...`)
     logger.end()
@@ -44,7 +43,7 @@ const runServer = async (hostname, { getOptionOptional, getSingleOption, getSing
 
   start()
 
-  logger.add(`[SERVER UP] pid: ${process.pid}, running at: ${option.baseUrl}, version: ${version}`)
+  logger.add(`[SERVER UP] pid: ${process.pid}, running at: ${option.baseUrl}`)
 }
 
 const main = async () => {

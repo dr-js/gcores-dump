@@ -50,12 +50,16 @@ const onLoadFunc = async () => {
 
   const T = initI18N()
 
+  document.title = T('text-gcores-dump')
+
   qS('#main-panel', T('step-init'))
 
   if (!('serviceWorker' in navigator)) return qS('#main-panel', T('feat-service-worker'))
-  const registration = await navigator.serviceWorker.register(SERVICE_WORKER_URL).catch((error) => { console.error('ServiceWorker registration failed:', error) })
-  if (!registration) return qS('#main-panel', T('feat-error-service-worker'))
-  __DEV__ && console.log('ServiceWorker Registration succeeded:', registration)
+  if (!navigator.serviceWorker.controller) {
+    const registration = await navigator.serviceWorker.register(SERVICE_WORKER_URL).catch((error) => { console.error('ServiceWorker registration failed:', error) })
+    if (!registration) return qS('#main-panel', T('feat-error-service-worker'))
+    __DEV__ && console.log('ServiceWorker Registration succeeded:', registration)
+  } else __DEV__ && console.log('ServiceWorker found, skip register')
   const resetCode = () => tryPostServiceWorker({ data: { type: 'reset-code' }, preCheck: () => navigator.onLine && confirm(T('message-reset-code')) })
     .then(deleteAudioList)
     .then(() => {

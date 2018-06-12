@@ -5,26 +5,9 @@ import { createDirectory } from 'dr-js/module/node/file/File'
 import { getFileList } from 'dr-js/module/node/file/Directory'
 import { modify } from 'dr-js/module/node/file/Modify'
 import { compressFileList } from 'dr-js/module/node/file/Compress'
+import { getEntityTagByContentHash } from 'dr-js/module/node/module/EntityTag'
 
-/* s/ (static)
-  audio/:key.json // will merge on load
-  audio-list.json // will merge on load
-  cache-config.json // version will be rewrite to match package.json
-  manifest.json
-  service-worker.js // pulled up for scope
-  logo/:size.png
-*/
-
-const prepareAudioDumpJSON = async ({ fileGcoresDumpList = [], pathPreparedStatic, version, logger }) => {
-  await createDirectory(pathPreparedStatic)
-
-  // NOTE: the path will be the output of 'source-static'
-  await modify.copy(resolve(__dirname, '../static'), pathPreparedStatic)
-
-  // will rewrite cache-config.json
-  const pathCacheConfig = resolve(pathPreparedStatic, 'cache-config.json')
-  writeFileSync(pathCacheConfig, JSON.stringify({ ...JSON.parse(readFileSync(pathCacheConfig, { encoding: 'utf8' })), version }))
-
+const prepareAudioList = async ({ fileGcoresDumpList, pathPreparedStatic, logger }) => {
   // TODO: split pack audio list by every 3 month?
   const pathAudioList = resolve(pathPreparedStatic, 'audio-list.json')
   let audioList = []
@@ -38,8 +21,7 @@ const prepareAudioDumpJSON = async ({ fileGcoresDumpList = [], pathPreparedStati
       logger.add(`[PREPARE] loading Gcores Dump file: ${fileGcoresDump}`)
       const { pageDataList, radioDataList } = await loadLocalJSON(fileGcoresDump)
 
-      // just concat, will deduplicate & sort later
-      audioList = [ ...pageDataList, ...audioList ]
+      audioList = [ ...pageDataList, ...audioList ] // just concat, will deduplicate & sort later
 
       // NOTE: split pack each audio
       await createDirectory(resolve(pathPreparedStatic, 'audio'))
@@ -49,7 +31,6 @@ const prepareAudioDumpJSON = async ({ fileGcoresDumpList = [], pathPreparedStati
           JSON.stringify(radioData)
         )
       }
-
       logger.add(`[PREPARE] loaded Gcores Dump file: ${fileGcoresDump}, pageDataList: ${pageDataList.length}, radioDataList: ${radioDataList.length}`)
     }
 
@@ -64,11 +45,32 @@ const prepareAudioDumpJSON = async ({ fileGcoresDumpList = [], pathPreparedStati
 
   if (!audioList.length) throw new Error('[Error] empty audioList, load some Gcores Dump file first')
 
-  for (const filePath of await getFileList(pathPreparedStatic)) {
-    filePath.endsWith('.gz') && await modify.delete(filePath) // delete old gzip file
-  }
+  return getEntityTagByContentHash(Buffer.from(JSON.stringify(audioList)))
+}
 
-  await compressFileList({ fileList: await getFileList(pathPreparedStatic) })
+/* s/ (static)
+  audio/:key.json // will merge on load
+  audio-list.json // will merge on load
+  cache-config.json // version will be rewrite to match package.json
+  manifest.json
+  service-worker.js // pulled up for scope
+  logo/:size.png
+*/
+
+const prepareAudioDumpJSON = async ({ fileGcoresDumpList = [], pathPreparedStatic, packageName, packageVersion, logger }) => {
+  await createDirectory(pathPreparedStatic)
+  await modify.copy(resolve(__dirname, '../static'), pathPreparedStatic) // NOTE: the path will be the output of 'source-static'
+  const audioListHash = await prepareAudioList({ fileGcoresDumpList, pathPreparedStatic, logger })
+  const version = `${packageName}@${packageVersion}#${audioListHash}`
+
+  // will rewrite cache-config.json
+  const pathCacheConfig = resolve(pathPreparedStatic, 'cache-config.json')
+  writeFileSync(pathCacheConfig, JSON.stringify({ ...JSON.parse(readFileSync(pathCacheConfig, { encoding: 'utf8' })), version }))
+
+  for (const filePath of await getFileList(pathPreparedStatic)) filePath.endsWith('.gz') && await modify.delete(filePath) // delete old gzip file
+  await compressFileList({ fileList: await getFileList(pathPreparedStatic) }) // re-generate gzip file
+
+  logger.add(`[PREPARE] done, cache-config version: ${version}`)
 }
 
 export { prepareAudioDumpJSON }
