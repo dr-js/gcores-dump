@@ -256,15 +256,18 @@ const initRender = ({
   const setFilterStar = () => setAudioListFilter({ type: 'star' })
   const setFilterDownload = () => setAudioListFilter({ type: 'download' })
   const setFilterTime = () => setAudioListFilter({ type: 'time' })
-  const setFilterFilter = lossyAsync(() => asyncRenderModal((resolve) => [
-    cE('label', { for: 'filter-input', className: 'margin', innerText: T('message-enter-filter') }),
-    cE('input', { id: 'filter-input', className: 'margin' }),
-    createFlexRow(
-      createFlexDiv(),
-      createIconButton('search', { onclick: () => resolve(qS('#filter-input').value) }),
-      createIconButton('clear', { onclick: resolve })
-    )
-  ], (filterText) => {
+  const setFilterFilter = lossyAsync(() => asyncRenderModal((resolve) => {
+    setTimeout(() => qS('#filter-input') && qS('#filter-input').focus(), 500)
+    return [
+      cE('label', { for: 'filter-input', className: 'margin', innerText: T('message-enter-filter') }),
+      cE('input', { id: 'filter-input', className: 'margin' }),
+      createFlexRow(
+        createFlexDiv(),
+        createIconButton('search', { onclick: () => resolve(qS('#filter-input').value) }),
+        createIconButton('clear', { onclick: resolve })
+      )
+    ]
+  }, (filterText) => {
     const filterList = (filterText || '').toLowerCase().split(/[\s'"-,.，。]/).filter(Boolean)
     filterList.length && setAudioListFilter({ type: 'filter', filterList })
   })).trigger

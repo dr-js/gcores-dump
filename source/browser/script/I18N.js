@@ -24,7 +24,7 @@ const initI18N = () => {
     'message-delete-audio': [ 'Delete cached audio?', '清除音频缓存？' ],
     'message-audio-fetch-blocked': [ 'This audio source can not be cached, offline play unavailable', '不支持缓存该音频文件源，仅可在线播放' ],
 
-    'text-start-cache': [ 'Start cache (5~10MB)', '开始缓存 (5~10MB)' ],
+    'text-start-cache': [ 'Start cache (4~8MB)', '开始缓存 (4~8MB)' ],
     'text-loading': [ 'loading…', '加载中…' ],
     'text-loading-cache': [ 'Downloading to cache…', '下载资源到缓存…' ],
 

@@ -1,5 +1,7 @@
 # G-cores dump
 
+base dump script:
+
 ```js
 {
   // dump page & radio data from `https://www.g-cores.com`
@@ -131,7 +133,7 @@
         linkUrl // optional
       }))
 
-      return { 
+      return {
         url,
         title,
         titleSecondary,
@@ -145,11 +147,11 @@
       }
     }
 
-    const massDump = async (urlPrefix, from, to) => {
-      const pageDataList = await dumpPageList(urlPrefix, from, to)
+    const massDump = async (urlPrefix, from, to, isKeepFetchBlocked = false) => {
+      let pageDataList = await dumpPageList(urlPrefix, from, to)
       console.log(`[massDump] pageDataList count: ${pageDataList.length}`)
 
-      const radioDataList = []
+      let radioDataList = []
       for (let index = 0, indexMax = pageDataList.length; index < indexMax; index++) {
         const { url } = pageDataList[ index ]
         console.log(`[massDump] [${index}/${indexMax}] radio: ${url}`)
@@ -157,7 +159,17 @@
         radioData && radioDataList.push(radioData)
       }
 
-      const fileName = `[GcoresDump][${(new Date()).toISOString()}]${urlPrefix}[${from}-${to}]`
+      if (!isKeepFetchBlocked) {
+        const filterUrlSet = new Set()
+        radioDataList.forEach(({ url, radioUrlFetchBlocked }) => radioUrlFetchBlocked && filterUrlSet.add(url))
+        pageDataList = pageDataList.filter(({ url }) => !filterUrlSet.has(url))
+        radioDataList = radioDataList.filter(({ url }) => !filterUrlSet.has(url))
+        console.log(`[massDump] filter fetch blocked: ${filterUrlSet.size}`)
+      }
+
+      if (pageDataList.length !== radioDataList.length) throw new Error(`[Error] dump size mismatch: pageDataList: ${pageDataList.length}, radioDataList: ${radioDataList.length}`)
+
+      const fileName = `[GcoresDump][${(new Date()).toISOString()}][${pageDataList.length}]${urlPrefix}[${from}-${to}]`
       const dumpData = { timestamp: Date.now(), argument: { urlPrefix, from, to }, pageDataList, radioDataList }
       const dumpString = JSON.stringify(dumpData)
 
@@ -180,5 +192,22 @@
       console.log('== Dump script ready ==')
     }
   }))
+}
+```
+
+current dump script:
+
+```js
+{
+  const doMassDump = async () => {
+    const { massDump } = window
+    await massDump(`https://www.g-cores.com/categories/12/originals?page=`, 1, 7) // 7 pages of Gadio pro (after that all has `radioUrlFetchBlocked`)
+    await massDump(`https://www.g-cores.com/categories/14/originals?page=`, 1, 2) // 2 pages of Gadio Music
+    await massDump(`https://www.g-cores.com/categories/45/originals?page=`, 1, 1) // 1 pages of Gadio News
+    await massDump(`https://www.g-cores.com/categories/49/originals?page=`, 1, 2) // 2 pages of Gadio Early Access
+    await massDump(`https://www.g-cores.com/categories/53/originals?page=`, 1, 2) // 2 pages of Gadio Story
+    console.log('== Dump complete ==')
+  }
+  Object.assign(window, { doMassDump })
 }
 ```

@@ -15,6 +15,7 @@ const getHTML = ({ envObject, FAVICON_URL, MANIFEST_URL, CSS_URL, FONT_URL }) =>
   `<link rel="stylesheet" href="${CSS_URL}" />`,
   `<link rel="preload" href="${FONT_URL}" as="font" crossorigin="anonymous" />`,
   COMMON_STYLE(),
+  chromeFixStyle,
   renderStyle
 ], [
   renderHTML,
@@ -22,6 +23,12 @@ const getHTML = ({ envObject, FAVICON_URL, MANIFEST_URL, CSS_URL, FONT_URL }) =>
   DR_BROWSER_SCRIPT(),
   `<script>qS('#main-panel', 'Script loading…<br />代码加载中…<br />' + navigator.userAgent)</script>`
 ])
+
+// TODO: Chrome PWA display standalone & fullscreen not working: https://stackoverflow.com/a/49414031
+const chromeFixStyle = `<style>
+html { overflow: hidden } 
+body { height:100%; position:fixed; } 
+</style>`
 
 // TODO: pull out this service worker init step
 
