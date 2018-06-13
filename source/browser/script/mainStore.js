@@ -12,83 +12,84 @@ const initMainStore = () => {
     }
   } = window
 
-  const initialState = {
-    audioListState: {
-      audioList: [],
-      audioListFilter: {
-        type: 'time', // 'download|star|time|filter'
-        filterList: []
-      }
-    },
-    audioState: null,
-
-    currentPanel: 'audio-list', // 'audio-list|audio'
-    isAudioListMinimize: false,
-    isPlayerMinimize: false,
+  const initialStorageState = {
     audioCacheStarList: [ /* audioCacheUrl */ ],
     audioCacheSizeMap: { /* [audioCacheUrl]: size */ },
-    storageStatus: { value: 0, max: 0 }
+    isDoneCacheRebuild: true,
+    isDoneCacheVerify: true,
+    isAudioListMinimize: false
+    // isPlayerMinimize: false
     // playerStatus: { audioCacheUrl: '', time: 0 } // TODO: maybe save last player time
+  }
+
+  const initialState = {
+    ...initialStorageState,
+
+    // will reset & regenerate every time
+    audioListState: {
+      audioList: [],
+      audioListFilter: { type: 'time', filterList: [] } // type = 'download|star|time|filter'
+    },
+    audioState: null,
+    storageStatus: { value: 0, max: 0 },
+    currentPanel: 'audio-list' // 'audio-list|audio'
   }
 
   const createMainStore = (state = initialState) => {
     const { subscribe, unsubscribe, getState, setState } = createStateStore(state)
 
-    const updateAudioListState = (audioListState) => {
+    const getSubStateUpdate = (key, func) => (...args) => {
       const state = getState()
-      setState(objectSet(state, 'audioListState', objectMerge(state.audioListState, audioListState)))
+      setState(objectSet(state, key, func(state[ key ], ...args)))
     }
-    const updateAudioState = (audioState) => {
-      const state = getState()
-      setState(objectSet(state, 'audioState', audioState))
-    }
-    const setCurrentPanel = (currentPanel) => {
-      const state = getState()
-      setState(objectSet(state, 'currentPanel', currentPanel))
-    }
-    const toggleAudioListMinimize = () => {
-      const state = getState()
-      setState(objectSet(state, 'isAudioListMinimize', !state.isAudioListMinimize))
-    }
-    const setAudioCacheStarList = (audioCacheStarList) => {
-      const state = getState()
-      setState(objectSet(state, 'audioCacheStarList', audioCacheStarList))
-    }
-    const setAudioCacheSizeMap = (audioCacheSizeMap) => {
-      const state = getState()
-      setState(objectSet(state, 'audioCacheSizeMap', audioCacheSizeMap))
-    }
+    const subStateSet = (subState, nextSubState) => nextSubState
+    const subStateUpdate = (subState, nextSubState) => objectMerge(subState, nextSubState)
+
+    const setAudioState = getSubStateUpdate('audioState', subStateSet)
+    const setAudioCacheStarList = getSubStateUpdate('audioCacheStarList', subStateSet)
+    const setAudioCacheSizeMap = getSubStateUpdate('audioCacheSizeMap', subStateSet)
+    const setStorageStatus = getSubStateUpdate('storageStatus', subStateSet)
+    const setCurrentPanel = getSubStateUpdate('currentPanel', subStateSet)
+    const setIsDoneCacheRebuild = getSubStateUpdate('isDoneCacheRebuild', subStateSet)
+    const setIsDoneCacheVerify = getSubStateUpdate('isDoneCacheVerify', subStateSet)
+
+    const updateAudioListState = getSubStateUpdate('audioListState', subStateUpdate)
+
+    const toggleAudioListMinimize = getSubStateUpdate('isAudioListMinimize', (subState) => !subState)
+
     const refreshStorageStatus = navigator.storage && navigator.storage.estimate
       ? lossyAsync(async () => {
         const { quota: max, usage: value } = await navigator.storage.estimate()
-        setState(objectSet(getState(), 'storageStatus', { max, value }))
+        setStorageStatus({ max, value })
       }).trigger
       : () => {
         const state = getState()
         const value = Object.values(state.audioCacheSizeMap).reduce((o, size) => o + size, 0)
-        setState(objectSet(state, 'storageStatus', { max: 0, value }))
+        setStorageStatus({ max: 0, value })
       }
 
     return {
       subscribe,
       unsubscribe,
       getState,
-      updateAudioListState,
-      updateAudioState,
-      setCurrentPanel,
-      toggleAudioListMinimize,
+
+      setAudioState,
       setAudioCacheStarList,
       setAudioCacheSizeMap,
+      setCurrentPanel,
+      setIsDoneCacheRebuild,
+      setIsDoneCacheVerify,
+      updateAudioListState,
+      toggleAudioListMinimize,
       refreshStorageStatus
-
     }
   }
 
-  const toStorageState = ({
-    isAudioListMinimize, isPlayerMinimize, audioCacheSizeMap, audioCacheStarList
-  }) => ({
-    isAudioListMinimize, isPlayerMinimize, audioCacheSizeMap, audioCacheStarList
-  })
+  const storageStateKeyList = Object.keys(initialStorageState)
+  const toStorageState = (state) => storageStateKeyList.reduce((o, key) => {
+    o[ key ] = state[ key ]
+    return o
+  }, {})
 
   return {
     initialState,

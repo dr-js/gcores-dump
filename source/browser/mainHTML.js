@@ -1,10 +1,14 @@
 import { COMMON_LAYOUT, COMMON_STYLE, COMMON_SCRIPT, DR_BROWSER_SCRIPT } from 'dr-js/module/node/server/commonHTML'
 
 import { initI18N } from './script/I18N'
+import { initServiceWorker } from './script/serviceWorker'
 import { initMainStore } from './script/mainStore'
 import { initCacheStore } from './script/cacheStore'
 import { initAudioStore } from './script/audioStore'
-import { initRender, initRenderStatus, initCacheOperation, renderStyle, renderHTML } from './script/render'
+import { initCacheOperation } from './script/cacheOperation'
+
+import { initRenderModal } from './render/renderModal'
+import { initRender, renderStyle, renderHTML } from './render/render'
 
 const getHTML = ({ envObject, FAVICON_URL, MANIFEST_URL, CSS_URL, FONT_URL }) => COMMON_LAYOUT([
   `<title>G-core Dump</title>`,
@@ -19,7 +23,21 @@ const getHTML = ({ envObject, FAVICON_URL, MANIFEST_URL, CSS_URL, FONT_URL }) =>
   renderStyle
 ], [
   renderHTML,
-  COMMON_SCRIPT({ ...envObject, initI18N, initMainStore, initCacheStore, initAudioStore, initRender, initRenderStatus, initCacheOperation, onload: onLoadFunc }),
+  COMMON_SCRIPT({
+    ...envObject,
+
+    initI18N,
+    initServiceWorker,
+    initMainStore,
+    initCacheStore,
+    initAudioStore,
+    initCacheOperation,
+
+    initRenderModal,
+    initRender,
+
+    onload: onLoadFunc
+  }),
   DR_BROWSER_SCRIPT(),
   `<script>qS('#main-panel', 'Script loading…<br />代码加载中…<br />' + navigator.userAgent)</script>`
 ])
@@ -32,97 +50,98 @@ body { height:100%; position:fixed; }
 
 // TODO: pull out this service worker init step
 
-// TODO: add router & support back button
-// TODO: add fullscreen modal popup (setting, search)
+// TODO: NEXT: add router & support back button
 // TODO: add keyboard shortcuts (play/pause)
 
 const onLoadFunc = async () => {
   const {
-    alert, confirm, fetch, location, navigator, localStorage, MessageChannel, Request,
+    alert, confirm, fetch, location, navigator, localStorage,
     SERVICE_WORKER_URL, CACHE_CONFIG_URL, AUDIO_LIST_FETCH_URL,
     qS, cE,
-    initI18N, initMainStore, initCacheStore, initAudioStore, initRender, initRenderStatus, initCacheOperation,
+    initI18N, initServiceWorker, initMainStore, initCacheStore, initAudioStore, initCacheOperation,
+    initRenderModal, initRender,
     Dr: {
-      Common: { Error: { catchAsync }, Function: { debounce } },
+      Common: { Error: { catchAsync }, Function: { debounce, lossyAsync } },
       Browser: { Module: { StateStorage: { createSyncStateStorage } } }
     }
   } = window
 
   const T = initI18N()
+  const { cacheAudioListRedundantCheck, cacheAudioList, deleteAudioList, cacheAudio, deleteAudio } = initCacheOperation({ T })
+  const { renderLoading, withLoading, updateLoadingStatus, asyncRenderModal, updateStorageStatus } = initRenderModal({ T })
 
   document.title = T('text-gcores-dump')
 
   qS('#main-panel', T('step-init'))
 
-  if (!('serviceWorker' in navigator)) return qS('#main-panel', T('feat-service-worker'))
-  if (!navigator.serviceWorker.controller) {
-    const registration = await navigator.serviceWorker.register(SERVICE_WORKER_URL).catch((error) => { console.error('ServiceWorker registration failed:', error) })
-    if (!registration) return qS('#main-panel', T('feat-error-service-worker'))
-    __DEV__ && console.log('ServiceWorker Registration succeeded:', registration)
-  } else __DEV__ && console.log('ServiceWorker found, skip register')
-  const resetCode = () => tryPostServiceWorker({ data: { type: 'reset-code' }, preCheck: () => navigator.onLine && confirm(T('message-reset-code')) })
-    .then(deleteAudioList)
-    .then(() => {
-      alert(T('message-reset-code-done'))
-      location.reload()
-    }, () => {})
-  const resetAll = () => tryPostServiceWorker({ data: { type: 'reset-all' }, preCheck: () => confirm(T('message-reset-all')) })
-    .then(() => {
-      localStorage.clear()
-      alert(T('message-reset-all-done'))
-    }, () => {})
-
-  const tryPostServiceWorker = ({ data = {}, preCheck = () => true }) => new Promise((resolve, reject) => {
-    if (!navigator.serviceWorker.controller) return reject(new Error('serviceWorker.no controller'))
-    if (!preCheck()) return reject(new Error('preCheck failed'))
-    const messageChannel = new MessageChannel() // for result
-    messageChannel.port1.onmessage = (event) => {
-      __DEV__ && console.log('service response', event.data)
-      const { result, error } = event.data
-      error ? reject(error) : resolve(result)
-    }
-    navigator.serviceWorker.controller.postMessage(data, [ messageChannel.port2 ])
-  })
+  const { isServiceWorkerAvailable, tryRegisterServiceWorker, tryPostServiceWorker } = initServiceWorker()
+  if (!isServiceWorkerAvailable()) return qS('#main-panel', T('feat-service-worker'))
+  try { await tryRegisterServiceWorker(SERVICE_WORKER_URL) } catch (error) {
+    console.error('ServiceWorker registration failed:', error)
+    return qS('#main-panel', T('feat-error-service-worker'))
+  }
+  const resetRebuild = lossyAsync(async () => { // TODO test
+    await tryPostServiceWorker({ data: { type: 'reset-code' }, preCheck: () => navigator.onLine && confirm(T('message-reset-rebuild')) })
+    await deleteAudioList({ cacheStore })
+    mainStore.setIsDoneCacheVerify(false)
+    mainStore.setIsDoneCacheRebuild(false)
+    createSyncStateStorage({ keyPrefix: '[cache-state]' }).save(cacheStore.getState())
+    createSyncStateStorage({ keyPrefix: '[main-state]' }).save(toStorageState(mainStore.getState()))
+    alert(T('message-reset-rebuild-done'))
+    location.reload()
+  }).trigger
+  const resetCode = lossyAsync(async () => {
+    await tryPostServiceWorker({ data: { type: 'reset-code' }, preCheck: () => navigator.onLine && confirm(T('message-reset-code')) })
+    await deleteAudioList({ cacheStore })
+    mainStore.setIsDoneCacheVerify(false)
+    createSyncStateStorage({ keyPrefix: '[cache-state]' }).save(cacheStore.getState())
+    createSyncStateStorage({ keyPrefix: '[main-state]' }).save(toStorageState(mainStore.getState()))
+    alert(T('message-reset-code-done'))
+    location.reload()
+  }).trigger
+  const resetAll = lossyAsync(async () => {
+    await tryPostServiceWorker({ data: { type: 'reset-all' }, preCheck: () => confirm(T('message-reset-all')) })
+    localStorage.clear()
+    alert(T('message-reset-all-done'))
+  }).trigger
 
   qS('#main-panel', T('step-load-cache'))
 
   const { resourceCacheKey } = await (await fetch(CACHE_CONFIG_URL)).json()
   __DEV__ && console.log('loaded cacheConfig resourceCacheKey:', { resourceCacheKey })
 
+  const { initialState: initialCacheState, createCacheStore, verifyCacheState } = initCacheStore(resourceCacheKey)
   const { initialState: initialMainState, createMainStore, toStorageState } = initMainStore()
   const { createAudioStore } = initAudioStore()
-  const { initialState: initialCacheState, createCacheStore } = initCacheStore(resourceCacheKey)
 
-  const cacheStateStorage = createSyncStateStorage({ keyPrefix: '[cache-state]' })
-  const cacheStore = await createCacheStore(cacheStateStorage.init(initialCacheState))
-  cacheStateStorage.save(cacheStore.getState())
-  __DEV__ && console.log('initialCacheState', cacheStore.getState())
-  cacheStore.subscribe(debounce((state) => {
-    __DEV__ && console.log('cacheStateStorage.save', state)
-    cacheStateStorage.save(state)
-    updateStorageStatus()
-  }))
+  const mainStore = await (async () => {
+    const mainStateStorage = createSyncStateStorage({ keyPrefix: '[main-state]' })
+    const mainStore = createMainStore(mainStateStorage.init(initialMainState))
+    await mainStore.refreshStorageStatus()
+    mainStateStorage.save(toStorageState(mainStore.getState()))
+    __DEV__ && console.log('initialMainState', mainStore.getState())
+    mainStore.subscribe(debounce((state) => {
+      __DEV__ && console.log('mainStateStorage.save', state)
+      mainStateStorage.save(toStorageState(state))
+    }))
+    return mainStore
+  })()
 
-  const audioStore = createAudioStore()
-
-  const mainStateStorage = createSyncStateStorage({ keyPrefix: '[main-state]' })
-  const mainStore = createMainStore(mainStateStorage.init(initialMainState))
-  await mainStore.refreshStorageStatus()
-  mainStateStorage.save(toStorageState(mainStore.getState()))
-  __DEV__ && console.log('initialMainState', mainStore.getState())
-  mainStore.subscribe(debounce((state) => {
-    __DEV__ && console.log('mainStateStorage.save', state)
-    mainStateStorage.save(toStorageState(state))
-  }))
-
-  const { renderLoading, withLoading, updateLoadingStatus, asyncRenderModal, updateStorageStatus } = initRenderStatus({ mainStore, T })
-  const { cacheAudioList, deleteAudioList, cacheAudio, deleteAudio } = initCacheOperation({ cacheStore, mainStore, T, updateLoadingStatus })
-  const { renderAudioList, renderAudio, renderControlPanel, setFilterDownload, setFilterStar, setFilterTime, updateControlConfig } = initRender({
-    audioStore, cacheStore, mainStore, T, resetCode, resetAll, withLoading, updateStorageStatus, asyncRenderModal, cacheAudio, deleteAudio
-  })
+  const cacheStore = await (async () => {
+    const cacheStateStorage = createSyncStateStorage({ keyPrefix: '[cache-state]' })
+    const cacheStore = await createCacheStore(cacheStateStorage.init(initialCacheState))
+    cacheStateStorage.save(cacheStore.getState())
+    __DEV__ && console.log('initialCacheState', cacheStore.getState())
+    cacheStore.subscribe(debounce((state) => {
+      __DEV__ && console.log('cacheStateStorage.save', state)
+      cacheStateStorage.save(state)
+      updateStorageStatus({ mainStore })
+    }))
+    return cacheStore
+  })()
 
   { // test AUDIO_LIST_FETCH_URL cache as first time open
-    const { result } = await catchAsync(cacheStore.getResponseByUrl, new Request(AUDIO_LIST_FETCH_URL).url)
+    const { result } = await catchAsync(cacheStore.getResponseByUrl, AUDIO_LIST_FETCH_URL)
     !result && await asyncRenderModal((resolve) => [
       cE('div', { className: 'margin', innerText: T('message-welcome') }),
       cE('div', { className: 'margin', innerText: T('message-cache-audio-list') }),
@@ -130,10 +149,48 @@ const onLoadFunc = async () => {
     ])
   }
 
-  qS('#main-panel', T('step-cache-audio-list'))
-  mainStore.updateAudioListState({ audioList: await withLoading(cacheAudioList) })
+  await withLoading(cacheAudioList, { mainStore, cacheStore, updateLoadingStatus })
+
+  if (!mainStore.getState().isDoneCacheRebuild) {
+    qS('#main-panel', T('step-cache-rebuild'))
+    const { audioCacheSizeMap } = mainStore.getState()
+    const cacheStore = await createCacheStore(initialCacheState)
+    await cacheAudioList({ mainStore, cacheStore })
+    await withLoading(async () => {
+      const audioCacheUrlList = Object.keys(audioCacheSizeMap)
+      for (let index = 0, indexMax = audioCacheUrlList.length; index < indexMax; index++) {
+        const updateLoadingStatusRebuild = (operation, subject, current, total, size) => updateLoadingStatus(
+          `[${index + 1}/${indexMax}]${T('text-rebuilding-cache')}\n${operation}`, subject, current, total, size
+        )
+        const audioCacheUrl = audioCacheUrlList[ index ]
+        await cacheAudio({ mainStore, cacheStore, audioCacheUrl, updateLoadingStatus: updateLoadingStatusRebuild })
+      }
+    })
+    mainStore.setIsDoneCacheRebuild(true)
+    createSyncStateStorage({ keyPrefix: '[cache-state]' }).save(cacheStore.getState())
+    createSyncStateStorage({ keyPrefix: '[main-state]' }).save(toStorageState(mainStore.getState()))
+    alert(T('message-cache-rebuild-done'))
+    location.reload()
+  }
+
+  if (!mainStore.getState().isDoneCacheVerify) {
+    qS('#main-panel', T('step-cache-audio-list'))
+    const cacheState = await verifyCacheState(cacheStore.getState())
+    mainStore.setIsDoneCacheVerify(true)
+    createSyncStateStorage({ keyPrefix: '[cache-state]' }).save(cacheState)
+    createSyncStateStorage({ keyPrefix: '[main-state]' }).save(toStorageState(mainStore.getState()))
+    location.reload()
+  }
+
+  const audioStore = createAudioStore()
 
   qS('#main-panel', T('step-render-ui'))
+  const { renderAudioList, renderAudio, renderControlPanel, setFilterDownload, setFilterStar, setFilterTime, updateControlConfig } = initRender({
+    audioStore, cacheStore, mainStore, T, resetRebuild, resetCode, resetAll, withLoading, updateLoadingStatus, updateStorageStatus, asyncRenderModal, cacheAudio, deleteAudio
+  })
+
+  await cacheAudioListRedundantCheck({ cacheStore })
+  mainStore.updateAudioListState({ audioList: await (await cacheStore.getResponseByUrl(AUDIO_LIST_FETCH_URL)).json() })
 
   { // set most relevant filter
     const { audioCacheStarList, audioCacheSizeMap } = mainStore.getState()
@@ -174,7 +231,7 @@ const onLoadFunc = async () => {
   navigator.serviceWorker.controller && await updateServiceWorkerController()
   navigator.serviceWorker.oncontrollerchange = updateServiceWorkerController
 
-  if (__DEV__) window.DEBUG = { cacheStore, audioStore, mainStore, T, renderLoading }
+  if (__DEV__) window.DEBUG = Object.assign(window.DEBUG || {}, { cacheStore, audioStore, mainStore, T, renderLoading })
 }
 
 export { getHTML }

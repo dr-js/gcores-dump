@@ -24,7 +24,8 @@ const configureResponder = async ({ pathPreparedStatic, server, option, logger }
       SERVICE_WORKER_URL: '/service-worker.js',
       CACHE_CONFIG_URL: '/s/cache-config.json',
       AUDIO_LIST_FETCH_URL: '/s/audio-list.json',
-      AUDIO_PATH_FETCH_URL: '/s/audio/'
+      AUDIO_PATH_FETCH_URL: '/s/audio/',
+      LOGO_URL: '/s/logo/512.png'
     },
     FAVICON_URL: '/s/logo/32.png',
     MANIFEST_URL: '/s/manifest.json',

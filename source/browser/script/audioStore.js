@@ -1,6 +1,6 @@
 const initAudioStore = () => {
   const {
-    Audio,
+    cE,
     Dr: {
       Common: {
         Math: { clamp },
@@ -23,21 +23,33 @@ const initAudioStore = () => {
     // Audio on Mobile Devices won't play without user interaction.
     // But, the user only has to push play once per audio element
     // so we keep a single audio element and reuse
-    const element = new Audio()
-    __DEV__ && element.addEventListener('error', (event) => {
-      console.log('[audio] error', event, element.error)
+
+    // TODO: HACK: maybe just the Audio() and src? check: https://stackoverflow.com/a/50491480
+    const audioElement = cE('audio')
+    const sourceElement = cE('source')
+
+    audioElement.appendChild(sourceElement)
+
+    if (__DEV__) window.DEBUG = Object.assign(window.DEBUG || {}, { audioElement, sourceElement })
+
+    // sourceElement.src = '<your blob url>'
+    // sourceElement.type = 'audio/mp3' // or whatever
+
+    __DEV__ && audioElement.addEventListener('error', (event) => {
+      console.log('[audio] error', event, audioElement.error)
       reset()
     })
-    element.addEventListener('loadeddata', () => {
-      __DEV__ && console.log('[audio] loadeddata (first frame of the media has finished loading)', element.src)
-      setState({ duration: element.duration })
+    audioElement.addEventListener('loadeddata', () => {
+      __DEV__ && console.log('[audio] loadeddata (first frame of the media has finished loading)', sourceElement.src)
+      setState({ duration: audioElement.duration })
     })
-    element.addEventListener('ended', () => { pause() })
-    element.addEventListener('play', () => {
+    audioElement.addEventListener('ended', () => { pause() })
+    audioElement.addEventListener('stalled', () => { audioElement.load() }) // TODO: HACK: check https://stackoverflow.com/a/21778782
+    audioElement.addEventListener('play', () => {
       setState({ isPlay: true })
       startTimer()
     })
-    element.addEventListener('pause', () => {
+    audioElement.addEventListener('pause', () => {
       setState({ isPlay: false })
       stopTimer()
     })
@@ -45,28 +57,30 @@ const initAudioStore = () => {
     const { subscribe, unsubscribe, getState, setState } = createStateStore(initialState)
 
     const { start: startTimer, stop: stopTimer } = createTimer({
-      func: () => setState({ currentTime: element.currentTime }),
+      func: () => setState({ currentTime: audioElement.currentTime }),
       delay: 500
     })
 
     const reset = () => {
       stopTimer()
-      // element.src = '' // NOTE: do not reset to '' (will cause error: 'MEDIA_ELEMENT_ERROR: Empty src attribute')
-      element.volume = 1 // NOTE: reset anyway
-      element.currentTime = 0
+      // sourceElement.src = '' // NOTE: do not reset to '' (will cause error: 'MEDIA_ELEMENT_ERROR: Empty src attribute')
+      audioElement.volume = 1 // NOTE: reset anyway, use you buttons/keyboard to set system volume
+      audioElement.currentTime = 0
       setState(initialState)
     }
-    const play = () => { element.play() }
-    const pause = () => { element.pause() }
-    const setSourceUrl = (sourceUrl, info = null) => {
+    const play = () => { audioElement.play() }
+    const pause = () => { audioElement.pause() }
+    const setSource = (sourceUrl = '', sourceType = '', info = null) => {
       if (sourceUrl === getState().sourceUrl && info === getState().info) return
-      element.src = sourceUrl
+      sourceElement.src = sourceUrl
+      sourceElement.type = sourceType
+      audioElement.load() // TODO: check needed?
       setState({ sourceUrl: sourceUrl, info })
     }
     const setTime = (currentTime) => {
       if (!getState().duration) return
       currentTime = clamp(currentTime, 0, getState().duration)
-      element.currentTime = currentTime
+      audioElement.currentTime = currentTime
       setState({ currentTime: currentTime })
     }
     const getLoadPromise = async () => {
@@ -85,7 +99,7 @@ const initAudioStore = () => {
       reset,
       play,
       pause,
-      setSourceUrl,
+      setSource,
       setTime,
       getLoadPromise
     }

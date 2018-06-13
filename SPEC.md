@@ -12,16 +12,22 @@
   - `configureResponder`
 + 📄 [source/browser/mainHTML.js](source/browser/mainHTML.js)
   - `getHTML`
++ 📄 [source/browser/render/render.js](source/browser/render/render.js)
+  - `initRender`, `renderHTML`, `renderStyle`
++ 📄 [source/browser/render/renderModal.js](source/browser/render/renderModal.js)
+  - `initRenderModal`
 + 📄 [source/browser/script/I18N.js](source/browser/script/I18N.js)
   - `initI18N`
 + 📄 [source/browser/script/audioStore.js](source/browser/script/audioStore.js)
   - `initAudioStore`
++ 📄 [source/browser/script/cacheOperation.js](source/browser/script/cacheOperation.js)
+  - `initCacheOperation`
 + 📄 [source/browser/script/cacheStore.js](source/browser/script/cacheStore.js)
   - `initCacheStore`
 + 📄 [source/browser/script/mainStore.js](source/browser/script/mainStore.js)
   - `initMainStore`
-+ 📄 [source/browser/script/render.js](source/browser/script/render.js)
-  - `initCacheOperation`, `initRender`, `initRenderStatus`, `renderHTML`, `renderStyle`
++ 📄 [source/browser/script/serviceWorker.js](source/browser/script/serviceWorker.js)
+  - `initServiceWorker`
 
 #### Bin Option Format
 📄 [source/option.js](source/option.js)

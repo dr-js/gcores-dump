@@ -1,5 +1,5 @@
 const renderStyle = `<style>
-body { font-family: 'Open Sans','Helvetica Neue',Arial,'Hiragino Sans GB','Microsoft YaHei','WenQuanYi Micro Hei',sans-serif; }
+body { font-family: 'Open Sans', 'Helvetica Neue', Arial, 'Hiragino Sans GB', 'Microsoft YaHei', 'WenQuanYi Micro Hei', sans-serif; }
 
 .margin { margin: 4px; }
 .flex-row { display: flex; flex-flow: row; align-items: center; }
@@ -8,8 +8,8 @@ body { font-family: 'Open Sans','Helvetica Neue',Arial,'Hiragino Sans GB','Micro
 .main-initial { display: flex; flex-flow: column; align-items: center; justify-content: center; }
 
 #loading, #modal { position: absolute; top: 0; left: 0; display: flex; flex-flow: column; align-items: center; justify-content: center; width: 100vw; height: 100vh; }
-#loading-main, #modal-main { padding: 4px; max-width: 90vw; min-width: 180px; border-radius: 4px; white-space: pre-wrap; text-align: center; background: #fff; box-shadow: 0 0 2px 0 #666; z-index: 1; }
 #loading-mask, #modal-mask { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: #eee; opacity: 0.5; }
+#loading-main, #modal-main { overflow-y: auto; margin: 8px; padding: 4px; max-width: 90vw; min-width: 180px; border-radius: 4px; white-space: pre-wrap; text-align: center; background: #fff; box-shadow: 0 0 2px 0 #666; z-index: 1; }
 
 #loading { opacity: 0; z-index: 256; transition: opacity 1s ease; }
 #modal { z-index: 128; }
@@ -24,7 +24,7 @@ body { font-family: 'Open Sans','Helvetica Neue',Arial,'Hiragino Sans GB','Micro
 
 .audio-list-item { position: relative; margin: 8px; height: 180px; max-width: 90vw; width: 340px; }
 .audio-list-image,
-.audio-list-info  { position: absolute; max-width: 85vw; width: 320px; max-height: 180px; border-radius: 4px; }
+.audio-list-info { position: absolute; max-width: 85vw; width: 320px; max-height: 180px; border-radius: 4px; }
 .audio-list-image { left: 0; top: 0; box-shadow: 0 0 2px 0 #666; }
 .audio-list-info { right: 0; bottom: 0; display: flex; flex-flow: column; align-items: stretch; padding: 2px 4px; height: 160px; background: linear-gradient(120deg, rgba(255, 255, 255, 0.8), #fff); box-shadow: 0 0 2px 0 #666, inset 0 0 32px 0 #fff; text-align: right; }
 .audio-list-info.minimize { width: auto; height: auto; }
@@ -63,12 +63,14 @@ const renderHTML = [
 const initRender = ({
   audioStore, cacheStore, mainStore,
   T,
-  resetCode, resetAll,
-  withLoading, updateStorageStatus, asyncRenderModal,
+  resetRebuild, resetCode, resetAll,
+  withLoading, updateLoadingStatus, updateStorageStatus, asyncRenderModal,
   cacheAudio, deleteAudio
 }) => {
   const {
-    open, location, URL, AUDIO_PATH_FETCH_URL,
+    open, location, Blob, URL,
+    AUDIO_PATH_FETCH_URL,
+    LOGO_URL,
     qS, cE, aCL, mECN, mEA,
     Dr: {
       Common: {
@@ -99,6 +101,8 @@ const initRender = ({
     const { cacheUrlList, cacheInfoList } = cacheStore.getState()
     const audioListFiltered = filterAudioListCached(audioList, audioListFilter, audioCacheStarList, cacheUrlList, cacheInfoList)
 
+    // TODO: add chunk page (64)
+
     for (const info of audioListFiltered) {
       const { url, imageUrl, title, titleSecondary, time, tag } = info
       const audioCacheUrl = getAudioCacheUrl(url)
@@ -117,9 +121,9 @@ const initRender = ({
           createFlexRow(
             createFlexDiv(),
             cacheSize && cE('div', { className: 'flex-row', innerText: `${Format.binary(cacheSize)}B` }),
-            !cacheSize && createIconButton('cloud_download', { onclick: () => withLoading(cacheAudio, audioCacheUrl) }),
+            !cacheSize && createIconButton('cloud_download', { onclick: () => withLoading(cacheAudio, { mainStore, cacheStore, audioCacheUrl, updateLoadingStatus }) }),
             cacheSize && createIconButton('play_arrow', { onclick: () => switchToAudio(audioCacheUrl) }),
-            cacheSize && createIconButton('delete', { onclick: () => withLoading(deleteAudio, audioCacheUrl) }),
+            cacheSize && createIconButton('delete', { onclick: () => withLoading(deleteAudio, { mainStore, cacheStore, audioCacheUrl }) }),
             isStar && createIconButton('star', { onclick: () => unstarUrl(audioCacheUrl) }),
             !isStar && createIconButton('star_border', { onclick: () => starUrl(audioCacheUrl) }),
             createIconButton('open_in_new', { onclick: () => open(url) })
@@ -206,7 +210,7 @@ const initRender = ({
     for (const radioTimeline of radioTimelineList) {
       const { time, imageUrl, title, content, linkUrl } = radioTimeline
       const element = mainPanel.appendChild(cE('div', { className: 'audio-timeline-item', tabIndex: 0 }, [
-        cE('img', { className: 'audio-timeline-image', src: imageUrl }),
+        imageUrl && cE('img', { className: 'audio-timeline-image', src: imageUrl }),
         cE('div', { className: 'audio-timeline-info' }, [
           createFlexRow(
             cE('h4', { innerText: title }),
@@ -291,7 +295,7 @@ const initRender = ({
     qS('#control-minimize').style.display = styleDisplayAudioList
     qS('#control-to-audio-list').style.display = styleDisplayAudio
 
-    updateStorageStatus()
+    updateStorageStatus({ mainStore })
   }
   const styleDisplay = (visible) => visible ? '' : 'none'
 
@@ -307,11 +311,13 @@ const initRender = ({
     const { storageStatus: { value, max } } = mainStore.getState()
     return [
       cE('h3', { className: 'margin', innerText: T('text-gcores-dump') }),
+      cE('img', { src: LOGO_URL, style: 'margin: 2px auto; height: 64px;' }),
       createFlexRow(
         cE('p', { className: 'margin', innerText: `${T('text-storage-status')}:` }),
         createFlexDiv(),
         cE('b', { className: 'margin', innerText: max ? `${Format.binary(value)}B/${Format.binary(max)}B` : `${Format.binary(value)}B` })
       ),
+      cE('div', { className: 'margin' }),
       createFlexRow(
         createIconButton('open_in_new', { onclick: () => { open('https://www.g-cores.com') } }),
         cE('div', { innerText: T('text-official-link') })
@@ -321,8 +327,14 @@ const initRender = ({
         cE('div', { innerText: T('text-article-link') })
       ),
       createFlexRow(
+        createIconButton('open_in_new', { onclick: () => { open('https://developer.mozilla.org/Apps/Progressive') } }),
+        cE('div', { innerText: T('text-pwa-link') })
+      ),
+      cE('div', { className: 'margin' }),
+      createFlexRow(
         createFlexDiv(),
         createIconButton(hasUpdate ? 'new_releases' : 'autorenew', { onclick: resetCode, disabled: !hasController }),
+        createIconButton('bug_report', { onclick: resetRebuild, disabled: !hasController }),
         createIconButton('delete_forever', { onclick: resetAll, disabled: !hasController }),
         createIconButton('clear', { onclick: resolve })
       )
@@ -367,7 +379,7 @@ const initRender = ({
     const closeAudioPanel = () => {
       removeEnhancedPointerEventListener()
       audioStore.pause()
-      audioStore.setSourceUrl('', null)
+      audioStore.setSource()
     }
 
     const slider = qS('.player-slider')
@@ -430,22 +442,22 @@ const initRender = ({
   const setAudioListFilter = (audioListFilter) => { mainStore.updateAudioListState({ audioListFilter }) }
 
   const switchToAudio = lossyAsync(async (audioCacheUrl) => {
-    const audioState = await cacheStore.getJsonByUrl(audioCacheUrl)
-    mainStore.updateAudioState(audioState)
+    const audioState = await (await cacheStore.getResponseByUrl(audioCacheUrl)).json()
+    mainStore.setAudioState(audioState)
     mainStore.setCurrentPanel('audio')
   }).trigger
 
   const openAudioPanel = lossyAsync(async ({ radioUrl, time, locateTimeline }) => {
     if (radioUrl !== audioStore.getState().info) {
       __DEV__ && console.log('[loadAudio]', radioUrl)
-      try {
-        const audioBlob = await cacheStore.getBlobByUrl(radioUrl)
-        const objectUrl = URL.createObjectURL(audioBlob)
-        audioStore.setSourceUrl(objectUrl, radioUrl)
-      } catch (error) {
-        __DEV__ && console.warn('[loadAudio] use radioUrl directly, failed to get objectUrl from radioUrl:', radioUrl, error)
-        audioStore.setSourceUrl(radioUrl, radioUrl)
-      }
+      const response = await cacheStore.getResponseByUrl(radioUrl)
+      const responseBlob = await response.blob() // TODO: some how tis blob get empty type (''), manually reset now
+      const responseType = response.headers.get('content-type')
+      const blob = responseBlob.type === responseType
+        ? responseBlob
+        : new Blob([ responseBlob ], { type: responseType })
+      const objectUrl = URL.createObjectURL(blob)
+      audioStore.setSource(objectUrl, responseType, radioUrl)
       audioStore.play()
     }
     if (time !== undefined) {
@@ -459,144 +471,8 @@ const initRender = ({
   return { renderAudioList, renderAudio, renderControlPanel, setFilterDownload, setFilterStar, setFilterTime, updateControlConfig }
 }
 
-const initRenderStatus = ({ mainStore, T }) => {
-  const { qS, cE, aCL, Dr: { Common: { Format, Error: { catchAsync }, Function: { createInsideOutPromise } } } } = window
-
-  const renderLoading = (isLoading) => {
-    if (!isLoading) return qS('#loading') && qS('#loading').remove()
-    !qS('#loading') && document.body.appendChild(cE('div', { id: 'loading' }, [
-      cE('div', { id: 'loading-main', innerText: T('text-loading') }),
-      cE('div', { id: 'loading-mask' })
-    ]))
-    setTimeout(() => { if (qS('#loading')) qS('#loading').style.opacity = 1 }, 200)
-  }
-  const withLoading = async (func, ...args) => {
-    renderLoading(true)
-    const { result, error } = await catchAsync(func, ...args)
-    renderLoading(false)
-    if (error) { throw error } else return result
-  }
-  const stringShorten = (string = '') => string.length > 48
-    ? `${string.slice(0, 16)}...${string.slice(-16)}`
-    : string
-  const updateLoadingStatus = (operation, subject, current, total, size) => {
-    const loadingMain = qS('#loading-main')
-    if (loadingMain) loadingMain.innerText = `[${current}/${total} - ${Format.binary(size)}B]\n${operation}\n${stringShorten(subject)}`
-  }
-
-  const renderModal = (isModal) => {
-    if (!isModal) return qS('#modal') && qS('#modal').remove()
-    !qS('#modal') && document.body.appendChild(cE('div', { id: 'modal' }, [
-      cE('div', { id: 'modal-main', className: 'flex-column' }),
-      cE('div', { id: 'modal-mask' })
-    ]))
-  }
-  const withModal = async (func, ...args) => {
-    renderModal(true)
-    const { result, error } = await catchAsync(func, ...args)
-    renderModal(false)
-    if (error) { throw error } else return result
-  }
-  const updateModalMain = (elementList = []) => { qS('#modal-main') && aCL(qS('#modal-main'), elementList) }
-  const asyncRenderModal = (getElementList, onResolve = () => {}) => withModal(async () => {
-    const { promise, resolve } = createInsideOutPromise()
-    updateModalMain(await getElementList(resolve))
-    return onResolve(await promise)
-  })
-
-  const updateStorageStatus = () => {
-    if (!qS('#storage-status')) return
-    const { storageStatus: { value } } = mainStore.getState()
-    qS('#storage-status').innerText = `${Format.binary(value)}B`
-  }
-
-  return { renderLoading, withLoading, updateLoadingStatus, asyncRenderModal, updateStorageStatus }
-}
-
-const initCacheOperation = ({ cacheStore, mainStore, T, updateLoadingStatus }) => {
-  const {
-    alert,
-    confirm,
-    Request,
-    AUDIO_LIST_FETCH_URL,
-    Dr: { Common: { Error: { catchAsync }, Immutable: { Object: { objectSet, objectDelete } } } }
-  } = window
-
-  const cacheFetchJSON = async (url, extra) => {
-    url = new Request(url).url
-    !cacheStore.hasUrl(url) && await cacheStore.addByUrl(url, extra)
-    return cacheStore.getJsonByUrl(url)
-  }
-
-  const cacheAudioList = async () => {
-    const audioList = await cacheFetchJSON(AUDIO_LIST_FETCH_URL, { type: 'audio-list-info' }).catch((error) => alert(`${T('message-cache-audio-list-failed')}\n${error}`))
-    let sumSize = 0
-    for (let index = 0, indexMax = audioList.length; index < indexMax; index++) {
-      const { imageUrl } = audioList[ index ]
-      updateLoadingStatus(T('text-loading-cache'), T('res-audio-list-image'), index, indexMax, sumSize)
-      await catchAsync(cacheStore.addByUrl, imageUrl, { type: 'audio-list-image' })
-      const { result: cacheInfo } = await catchAsync(cacheStore.addByUrl, imageUrl, { type: 'audio-list-image' })
-      if (cacheInfo) sumSize += cacheInfo.size
-    }
-    await mainStore.refreshStorageStatus()
-    return audioList
-  }
-  const deleteAudioList = async () => catchAsync(cacheStore.deleteByUrl, AUDIO_LIST_FETCH_URL)
-
-  const cacheAudio = async (audioCacheUrl) => {
-    const audio = await cacheFetchJSON(audioCacheUrl, { type: 'audio-info' })
-    const { imageUrl, authorDataList = [], radioTimelineList = [], radioUrl, radioUrlFetchBlocked } = audio
-
-    const taskList = []
-    taskList.push([ audioCacheUrl, { type: 'audio-info' } ]) // already cached, just for the size stat
-    taskList.push([ imageUrl, { type: 'audio-image' } ])
-    for (const { avatarUrl } of authorDataList) avatarUrl && taskList.push([ avatarUrl, { type: 'audio-author-image' } ])
-    for (const { imageUrl } of radioTimelineList) imageUrl && taskList.push([ imageUrl, { type: 'audio-timeline-image' } ])
-    !radioUrlFetchBlocked && taskList.push([ radioUrl, { type: 'audio-data' } ])
-
-    let sumSize = 0
-    for (let index = 0, indexMax = taskList.length; index < indexMax; index++) {
-      const [ url, extra ] = taskList[ index ]
-      updateLoadingStatus(T('text-loading-cache'), T(`res-${extra.type}`) || url, index, indexMax, sumSize)
-      const { result: cacheInfo } = await catchAsync(cacheStore.addByUrl, url, extra)
-      if (cacheInfo) sumSize += cacheInfo.size
-    }
-    await mainStore.refreshStorageStatus()
-
-    mainStore.setAudioCacheSizeMap(objectSet(mainStore.getState().audioCacheSizeMap, audioCacheUrl, sumSize))
-
-    radioUrlFetchBlocked && alert(T('message-audio-fetch-blocked'))
-
-    return audio
-  }
-  const deleteAudio = async (audioCacheUrl) => {
-    if (!cacheStore.hasUrl(audioCacheUrl)) return
-    if (!confirm(T('message-delete-audio'))) return
-    const { imageUrl, authorDataList = [], radioTimelineList = [], radioUrl } = await cacheStore.getJsonByUrl(audioCacheUrl)
-
-    const taskList = []
-    taskList.push(radioUrl)
-    taskList.push(imageUrl)
-    for (const { avatarUrl } of authorDataList) avatarUrl && taskList.push(avatarUrl)
-    for (const { imageUrl } of radioTimelineList) imageUrl && taskList.push(imageUrl)
-    taskList.push(audioCacheUrl)
-
-    for (let index = 0, indexMax = taskList.length; index < indexMax; index++) {
-      const url = taskList[ index ]
-      await catchAsync(cacheStore.deleteByUrl, url)
-      await mainStore.refreshStorageStatus()
-    }
-
-    mainStore.setAudioCacheSizeMap(objectDelete(mainStore.getState().audioCacheSizeMap, audioCacheUrl))
-  }
-
-  return { cacheAudioList, deleteAudioList, cacheAudio, deleteAudio }
-}
-
 export {
   renderStyle,
   renderHTML,
-  initRender,
-  initRenderStatus,
-  initCacheOperation
+  initRender
 }
