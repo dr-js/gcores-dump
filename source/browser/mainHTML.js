@@ -44,14 +44,12 @@ const getHTML = ({ envObject, FAVICON_URL, MANIFEST_URL, CSS_URL, FONT_URL }) =>
 
 // TODO: Chrome PWA display standalone & fullscreen not working: https://stackoverflow.com/a/49414031
 const chromeFixStyle = `<style>
-html { overflow: hidden } 
-body { height:100%; position:fixed; } 
+html { overflow: hidden }
+body { height:100%; position:fixed; }
 </style>`
 
-// TODO: pull out this service worker init step
-
 // TODO: NEXT: add router & support back button
-// TODO: add keyboard shortcuts (play/pause)
+// TODO: NEXT: pull author data up to audio list
 
 const onLoadFunc = async () => {
   const {
@@ -61,8 +59,13 @@ const onLoadFunc = async () => {
     initI18N, initServiceWorker, initMainStore, initCacheStore, initAudioStore, initCacheOperation,
     initRenderModal, initRender,
     Dr: {
-      Common: { Error: { catchAsync }, Function: { debounce, lossyAsync } },
-      Browser: { Module: { StateStorage: { createSyncStateStorage } } }
+      Common: {
+        Error: { catchAsync },
+        Function: { debounce, lossyAsync }
+      },
+      Browser: {
+        Module: { StateStorage: { createSyncStateStorage } }
+      }
     }
   } = window
 
@@ -74,13 +77,14 @@ const onLoadFunc = async () => {
 
   qS('#main-panel', T('step-init'))
 
+  // TODO: pull out this service worker init step
   const { isServiceWorkerAvailable, tryRegisterServiceWorker, tryPostServiceWorker } = initServiceWorker()
   if (!isServiceWorkerAvailable()) return qS('#main-panel', T('feat-service-worker'))
   try { await tryRegisterServiceWorker(SERVICE_WORKER_URL) } catch (error) {
     console.error('ServiceWorker registration failed:', error)
     return qS('#main-panel', T('feat-error-service-worker'))
   }
-  const resetRebuild = lossyAsync(async () => { // TODO test
+  const resetRebuild = lossyAsync(async () => {
     await tryPostServiceWorker({ data: { type: 'reset-code' }, preCheck: () => navigator.onLine && confirm(T('message-reset-rebuild')) })
     await deleteAudioList({ cacheStore })
     mainStore.setIsDoneCacheVerify(false)

@@ -78,9 +78,14 @@ const initRender = ({
         Error: { catchSync },
         Function: { lossyAsync },
         Math: { clamp },
-        Immutable: { transformCache, Array: { arrayMatchPush, arrayMatchDelete } }
+        Immutable: { transformCache, Array: { arrayMatchPush, arrayMatchDelete, arraySplitChunk } }
       },
-      Browser: { Input: { PointerEvent: { POINTER_EVENT_TYPE, applyPointerEventListener } } }
+      Browser: {
+        Input: {
+          PointerEvent: { POINTER_EVENT_TYPE, applyPointerEventListener },
+          KeyCommand: { createKeyCommandHub }
+        }
+      }
     }
   } = window
 
@@ -97,13 +102,24 @@ const initRender = ({
     mainPanel.className = 'control-panel-audio-list'
     if (!isSkipScrollReset) mainPanel.scrollTop = 0
 
-    const { audioListState: { audioList, audioListFilter }, isAudioListMinimize, audioCacheSizeMap, audioCacheStarList } = mainStore.getState()
+    const { audioListState: { audioList, audioListChunkIndex, audioListFilter }, isAudioListMinimize, audioCacheSizeMap, audioCacheStarList } = mainStore.getState()
     const { cacheUrlList, cacheInfoList } = cacheStore.getState()
     const audioListFiltered = filterAudioListCached(audioList, audioListFilter, audioCacheStarList, cacheUrlList, cacheInfoList)
 
-    // TODO: add chunk page (64)
+    // chunk page
+    const CHUNK_SIZE = 30
+    const audioListFilteredChunkList = arraySplitChunk(audioListFiltered, CHUNK_SIZE)
+    audioListFilteredChunkList.length > 1 && mainPanel.appendChild(cE(
+      'div',
+      { style: 'flex: 1 1 100%; display: flex; flex-flow: row wrap; align-items: center; justify-content: center;' },
+      audioListFilteredChunkList.map((v, index) => cE('button', {
+        className: index === audioListChunkIndex ? 'select' : '',
+        innerText: `${index * CHUNK_SIZE + 1}`,
+        onclick: () => setAudioListChunkIndex(index)
+      }))
+    ))
 
-    for (const info of audioListFiltered) {
+    for (const info of audioListFilteredChunkList[ audioListChunkIndex ]) {
       const { url, imageUrl, title, titleSecondary, time, tag } = info
       const audioCacheUrl = getAudioCacheUrl(url)
       const cacheSize = audioCacheSizeMap[ audioCacheUrl ]
@@ -188,7 +204,7 @@ const initRender = ({
 
     const { audioState: { radioUrl, imageUrl, url, title, titleSecondary, authorDataList = [], radioTimelineList = [] } } = mainStore.getState()
 
-    mainPanel.appendChild(cE('div', { className: 'audio-timeline-item', tabIndex: 0 }, [
+    const timelineDivTitle = mainPanel.appendChild(cE('div', { className: 'audio-timeline-item', tabIndex: 0 }, [
       cE('img', { className: 'audio-timeline-image', src: imageUrl }),
       cE('div', { className: 'audio-timeline-info' }, [
         cE('h2', { innerText: title }),
@@ -232,11 +248,12 @@ const initRender = ({
 
     const locateTimeline = () => {
       const { currentTime } = audioStore.getState()
-      let currentElement = timelineDivList[ 0 ] && timelineDivList[ 0 ].element
+      let currentElement = timelineDivTitle
       for (const { time, element } of timelineDivList) {
-        if (currentTime < time) return currentElement && currentElement.focus()
+        if (currentTime < time) break
         currentElement = element
       }
+      currentElement && currentElement.focus()
     }
 
     openAudioPanel({ radioUrl, locateTimeline })
@@ -261,20 +278,28 @@ const initRender = ({
   const setFilterDownload = () => setAudioListFilter({ type: 'download' })
   const setFilterTime = () => setAudioListFilter({ type: 'time' })
   const setFilterFilter = lossyAsync(() => asyncRenderModal((resolve) => {
-    setTimeout(() => qS('#filter-input') && qS('#filter-input').focus(), 500)
+    const setFilter = () => resolve(qS('#filter-input').value)
+    setTimeout(() => qS('#filter-input') && qS('#filter-input').focus(), 200)
+    keyCommandHubFilter.addKeyCommand({ id: 'search-confirm', checkMap: { key: 'Enter' }, callback: setFilter })
+    keyCommandHubFilter.start()
+    keyCommandHubPlayer.stop() // TODO: untangle this code
     return [
       cE('label', { for: 'filter-input', className: 'margin', innerText: T('message-enter-filter') }),
       cE('input', { id: 'filter-input', className: 'margin' }),
       createFlexRow(
         createFlexDiv(),
-        createIconButton('search', { onclick: () => resolve(qS('#filter-input').value) }),
-        createIconButton('clear', { onclick: resolve })
+        createIconButton('search', { onclick: setFilter }),
+        createIconButton('clear', { onclick: () => resolve('') })
       )
     ]
   }, (filterText) => {
+    keyCommandHubFilter.deleteKeyCommand({ id: 'search-confirm' })
+    keyCommandHubFilter.stop()
+    keyCommandHubPlayer.start()
     const filterList = (filterText || '').toLowerCase().split(/[\s'"-,.，。]/).filter(Boolean)
     filterList.length && setAudioListFilter({ type: 'filter', filterList })
   })).trigger
+  const keyCommandHubFilter = createKeyCommandHub({})
 
   const updateControlPanel = () => {
     const { audioListState: { audioListFilter }, currentPanel, isAudioListMinimize, audioCacheSizeMap, audioCacheStarList } = mainStore.getState()
@@ -311,7 +336,7 @@ const initRender = ({
     const { storageStatus: { value, max } } = mainStore.getState()
     return [
       cE('h3', { className: 'margin', innerText: T('text-gcores-dump') }),
-      cE('img', { src: LOGO_URL, style: 'margin: 2px auto; height: 64px;' }),
+      cE('img', { src: LOGO_URL, style: 'margin: 2px auto; width: 64px; height: 64px;' }),
       createFlexRow(
         cE('p', { className: 'margin', innerText: `${T('text-storage-status')}:` }),
         createFlexDiv(),
@@ -366,8 +391,10 @@ const initRender = ({
           cE('p', { className: 'player-progress', innerText: '--/--' }),
           createFlexRow(
             createFlexDiv(),
-            createIconButton('more_horiz', { id: 'player-control-play' }),
+            createIconButton('more_horiz', { id: 'player-control-play', onclick: togglePlayer }),
             createIconButton('', { id: 'player-locate' }),
+            createIconButton('fast_rewind', { onclick: () => stepPlayerTime(-30) }),
+            createIconButton('fast_forward', { onclick: () => stepPlayerTime(+30) }),
             createIconButton('close', { onclick: () => { closeAudioPanel() } }),
             createFlexDiv()
           ),
@@ -423,7 +450,6 @@ const initRender = ({
     const controlPlay = qS('#player-control-play')
     if (controlPlay) {
       controlPlay.innerHTML = isPlay ? 'pause' : 'play_arrow'
-      controlPlay.onclick = isPlay ? audioStore.pause : audioStore.play
     }
     const progress = qS('.player-progress')
     if (progress) {
@@ -439,7 +465,26 @@ const initRender = ({
   }
 
   const switchToAudioList = () => { mainStore.setCurrentPanel('audio-list') }
-  const setAudioListFilter = (audioListFilter) => { mainStore.updateAudioListState({ audioListFilter }) }
+  const setAudioListChunkIndex = (audioListChunkIndex) => { mainStore.updateAudioListState({ audioListChunkIndex }) }
+  const setAudioListFilter = (audioListFilter) => { mainStore.updateAudioListState({ audioListFilter, audioListChunkIndex: 0 }) }
+
+  const togglePlayer = () => {
+    const { sourceUrl, isPlay } = audioStore.getState()
+    sourceUrl && audioStore[ isPlay ? 'pause' : 'play' ]()
+  }
+  const stepPlayerTime = (stepTime) => {
+    const { sourceUrl, currentTime } = audioStore.getState()
+    sourceUrl && audioStore.setTime(currentTime + stepTime)
+  }
+
+  const keyCommandHubPlayer = createKeyCommandHub({})
+  keyCommandHubPlayer.addKeyCommand({ checkMap: { key: 'Enter' }, callback: togglePlayer })
+  keyCommandHubPlayer.addKeyCommand({ checkMap: { key: ' ' }, callback: togglePlayer })
+  keyCommandHubPlayer.addKeyCommand({ checkMap: { key: 'ArrowLeft' }, callback: () => stepPlayerTime(-10) })
+  keyCommandHubPlayer.addKeyCommand({ checkMap: { key: 'ArrowRight' }, callback: () => stepPlayerTime(+10) })
+  mainStore.subscribe(({ audioListState, audioState, currentPanel, isAudioListMinimize, audioCacheStarList, audioCacheSizeMap }, prevState) => {
+    if (audioState !== prevState.audioState) audioState ? keyCommandHubPlayer.start() : keyCommandHubPlayer.stop()
+  })
 
   const switchToAudio = lossyAsync(async (audioCacheUrl) => {
     const audioState = await (await cacheStore.getResponseByUrl(audioCacheUrl)).json()
@@ -451,7 +496,7 @@ const initRender = ({
     if (radioUrl !== audioStore.getState().info) {
       __DEV__ && console.log('[loadAudio]', radioUrl)
       const response = await cacheStore.getResponseByUrl(radioUrl)
-      const responseBlob = await response.blob() // TODO: some how tis blob get empty type (''), manually reset now
+      const responseBlob = await response.blob() // TODO: some how this cache blob get empty type (''), manually reset now, fetch blob seems fine, though
       const responseType = response.headers.get('content-type')
       const blob = responseBlob.type === responseType
         ? responseBlob

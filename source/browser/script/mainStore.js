@@ -28,6 +28,7 @@ const initMainStore = () => {
     // will reset & regenerate every time
     audioListState: {
       audioList: [],
+      audioListChunkIndex: 0,
       audioListFilter: { type: 'time', filterList: [] } // type = 'download|star|time|filter'
     },
     audioState: null,
