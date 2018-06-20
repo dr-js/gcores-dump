@@ -81,10 +81,13 @@ base dump script:
             [ property.value.split(':').pop() ]: content
           }))
       ))
-
+      
       // "https://image.g-cores.com/ed04d003-0e4f-4185-8c2d-19d327da9e1e.jpg?x-oss-process=style/original_hl"
       const imageUrl = pageDOM.querySelector('.swiper-container .img-responsive').src
 
+      // "奥秘2,奥秘,工业革命"
+      const keywordList = pageDOM.querySelector('meta[name="keywords"]').content.split(',')
+      
       const authorListDOM = pageDOM.querySelector('.story_djs_items') // optional authorList
       const authorDataList = authorListDOM
         ? Array.from(pageDOM.querySelector('.story_djs_items').children)
@@ -138,6 +141,7 @@ base dump script:
         title,
         titleSecondary,
         imageUrl,
+        keywordList,
         authorDataList,
         radioId,
         radioSourceData,

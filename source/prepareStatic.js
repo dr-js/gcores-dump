@@ -39,13 +39,21 @@ const prepareAudioList = async ({ fileGcoresDumpList, pathPreparedStatic, logger
     audioList = audioList
       .filter(({ url }) => existUrlSet.has(url) ? false : existUrlSet.add(url)) // deduplicate
       .sort((a, b) => Date.parse(b) - Date.parse(a)) // sort
-    writeFileSync(pathAudioList, JSON.stringify(audioList))
     logger.add(`[PREPARE] result audioList: ${audioList.length}`)
   }
 
   if (!audioList.length) throw new Error('[Error] empty audioList, load some Gcores Dump file first')
 
-  return getEntityTagByContentHash(Buffer.from(JSON.stringify(audioList)))
+  // pull up `keywordList & authorDataList`
+  const mergedAudioList = []
+  for (const audioData of audioList) {
+    const { keywordList, authorDataList } = JSON.parse(readFileSync(resolve(pathPreparedStatic, 'audio', `${encodeURIComponent(audioData.url)}.json`), { encoding: 'utf8' }))
+    mergedAudioList.push({ ...audioData, keywordList, authorDataList })
+  }
+
+  const audioListString = JSON.stringify(mergedAudioList)
+  writeFileSync(pathAudioList, audioListString)
+  return getEntityTagByContentHash(Buffer.from(audioListString))
 }
 
 /* s/ (static)

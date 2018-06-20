@@ -96,7 +96,7 @@ const initRender = ({
 
   // ==================================================================================================================
   // ==================================================================================================================
-
+  const CHUNK_SIZE = 30
   const renderAudioList = ({ isSkipScrollReset = false }) => {
     const mainPanel = qS('#main-panel', '')
     mainPanel.className = 'control-panel-audio-list'
@@ -104,48 +104,53 @@ const initRender = ({
 
     const { audioListState: { audioList, audioListChunkIndex, audioListFilter }, isAudioListMinimize, audioCacheSizeMap, audioCacheStarList } = mainStore.getState()
     const { cacheUrlList, cacheInfoList } = cacheStore.getState()
-    const audioListFiltered = filterAudioListCached(audioList, audioListFilter, audioCacheStarList, cacheUrlList, cacheInfoList)
 
-    // chunk page
-    const CHUNK_SIZE = 30
-    const audioListFilteredChunkList = arraySplitChunk(audioListFiltered, CHUNK_SIZE)
-    audioListFilteredChunkList.length > 1 && mainPanel.appendChild(cE(
-      'div',
-      { style: 'flex: 1 1 100%; display: flex; flex-flow: row wrap; align-items: center; justify-content: center;' },
-      audioListFilteredChunkList.map((v, index) => cE('button', {
-        className: index === audioListChunkIndex ? 'select' : '',
-        innerText: `${index * CHUNK_SIZE + 1}`,
-        onclick: () => setAudioListChunkIndex(index)
-      }))
-    ))
+    if (audioListFilter.type === 'filter-author') {
+      aCL(mainPanel, filterAuthorAudioListCached(audioList).map(([ author, count ]) => cE('button', {
+        innerText: `${author} [${count}]`,
+        onclick: () => setAudioListFilter({ type: 'filter', filterList: [ author.toLowerCase() ] })
+      })))
+    } else if (audioListFilter.type === 'filter-tag') {
+      aCL(mainPanel, filterTagAudioListCached(audioList).map(([ tag, count ]) => cE('button', {
+        innerText: `${tag} [${count}]`,
+        onclick: () => setAudioListFilter({ type: 'filter', filterList: [ tag.toLowerCase() ] })
+      })))
+    } else {
+      const audioListFiltered = filterAudioListCached(audioList, audioListFilter, audioCacheStarList, cacheUrlList, cacheInfoList)
+      const audioListFilteredChunkList = arraySplitChunk(audioListFiltered, CHUNK_SIZE) // chunk page
 
-    for (const info of audioListFilteredChunkList[ audioListChunkIndex ]) {
-      const { url, imageUrl, title, titleSecondary, time, tag } = info
-      const audioCacheUrl = getAudioCacheUrl(url)
-      const cacheSize = audioCacheSizeMap[ audioCacheUrl ]
-      const isStar = audioCacheStarList.includes(audioCacheUrl)
-      mainPanel.appendChild(cE('div', { className: 'audio-list-item' }, [
-        cE('img', { className: 'audio-list-image', src: imageUrl }),
-        cE('div', { className: !isAudioListMinimize ? 'audio-list-info' : 'audio-list-info minimize' }, [
-          !isAudioListMinimize && createFlexRow(
-            cE('div', { className: 'flex-row', innerText: time }),
-            createFlexDiv(),
-            cE('div', { className: 'flex-row', innerText: tag })
-          ),
-          !isAudioListMinimize && cE('div', { className: 'audio-list-info-title', innerText: title }),
-          !isAudioListMinimize && cE('div', { className: 'audio-list-info-title-secondary', innerText: titleSecondary }),
-          createFlexRow(
-            createFlexDiv(),
-            cacheSize && cE('div', { className: 'flex-row', innerText: `${Format.binary(cacheSize)}B` }),
-            !cacheSize && createIconButton('cloud_download', { onclick: () => withLoading(cacheAudio, { mainStore, cacheStore, audioCacheUrl, updateLoadingStatus }) }),
-            cacheSize && createIconButton('play_arrow', { onclick: () => switchToAudio(audioCacheUrl) }),
-            cacheSize && createIconButton('delete', { onclick: () => withLoading(deleteAudio, { mainStore, cacheStore, audioCacheUrl }) }),
-            isStar && createIconButton('star', { onclick: () => unstarUrl(audioCacheUrl) }),
-            !isStar && createIconButton('star_border', { onclick: () => starUrl(audioCacheUrl) }),
-            createIconButton('open_in_new', { onclick: () => open(url) })
-          )
-        ])
-      ]))
+      audioListFilteredChunkList.length > 1 && renderAudioListChunkButton(mainPanel, audioListFilteredChunkList, audioListChunkIndex)
+
+      for (const info of audioListFilteredChunkList[ audioListChunkIndex ]) {
+        const { url, imageUrl, title, titleSecondary, time, tag } = info
+        const audioCacheUrl = getAudioCacheUrl(url)
+        const cacheSize = audioCacheSizeMap[ audioCacheUrl ]
+        const isStar = audioCacheStarList.includes(audioCacheUrl)
+        mainPanel.appendChild(cE('div', { className: 'audio-list-item' }, [
+          cE('img', { className: 'audio-list-image', src: imageUrl }),
+          cE('div', { className: !isAudioListMinimize ? 'audio-list-info' : 'audio-list-info minimize' }, [
+            !isAudioListMinimize && createFlexRow(
+              cE('div', { className: 'flex-row', innerText: time }),
+              createFlexDiv(),
+              cE('div', { className: 'flex-row', innerText: tag })
+            ),
+            !isAudioListMinimize && cE('div', { className: 'audio-list-info-title', innerText: title }),
+            !isAudioListMinimize && cE('div', { className: 'audio-list-info-title-secondary', innerText: titleSecondary }),
+            createFlexRow(
+              createFlexDiv(),
+              cacheSize && cE('div', { className: 'flex-row', innerText: `${Format.binary(cacheSize)}B` }),
+              !cacheSize && createIconButton('cloud_download', { onclick: () => withLoading(cacheAudio, { mainStore, cacheStore, audioCacheUrl, updateLoadingStatus }) }),
+              cacheSize && createIconButton('play_arrow', { onclick: () => switchToAudio(audioCacheUrl) }),
+              cacheSize && createIconButton('delete', { onclick: () => withLoading(deleteAudio, { mainStore, cacheStore, audioCacheUrl }) }),
+              isStar && createIconButton('star', { onclick: () => unstarUrl(audioCacheUrl) }),
+              !isStar && createIconButton('star_border', { onclick: () => starUrl(audioCacheUrl) }),
+              createIconButton('open_in_new', { onclick: () => open(url) })
+            )
+          ])
+        ]))
+      }
+
+      audioListFilteredChunkList.length > 1 && renderAudioListChunkButton(mainPanel, audioListFilteredChunkList, audioListChunkIndex)
     }
 
     updateControlPanel()
@@ -175,10 +180,12 @@ const initRender = ({
         return audioList.sort((a, b) => Date.parse(b.time) - Date.parse(a.time)) // bigger first
       case 'filter': {
         const { filterList } = audioListFilter
-        const getMatchCount = ({ title = '', titleSecondary = '', tag = '' }) => filterList.reduce((o, v) => {
+        const getMatchCount = ({ title = '', titleSecondary = '', tag = '', keywordList = [], authorDataList = [] }) => filterList.reduce((o, v) => {
           title.toLowerCase().includes(v) && o++
           titleSecondary.toLowerCase().includes(v) && o++
           tag.toLowerCase().includes(v) && o++
+          keywordList.join(' ').toLowerCase().includes(v) && o++
+          authorDataList.map(({ name }) => name).join(' ').toLowerCase().includes(v) && o++
           return o
         }, 0)
         return audioList.reduce((o, info) => {
@@ -191,8 +198,40 @@ const initRender = ({
       }
     }
   })
+  const filterAuthorAudioListCached = transformCache((audioList) => {
+    const { map } = audioList.map(({ authorDataList }) => authorDataList.map(({ name }) => name)).reduce((o, v) => {
+      v.forEach(o.add)
+      return o
+    }, createCountMap())
+    return Object.entries(map).sort(([ , a ], [ , b ]) => b - a) // bigger first
+  })
+  const filterTagAudioListCached = transformCache((audioList) => {
+    const { map } = audioList.map(({ keywordList }) => keywordList).reduce((o, v) => {
+      v.forEach(o.add)
+      return o
+    }, createCountMap())
+    return Object.entries(map).sort(([ , a ], [ , b ]) => b - a) // bigger first
+  })
+  const createCountMap = () => {
+    const map = {}
+    const add = (key) => {
+      if (map[ key ] !== undefined) map[ key ] += 1
+      else map[ key ] = 1
+    }
+    return { add, map }
+  }
+
   const starUrl = (audioCacheUrl) => { mainStore.setAudioCacheStarList(arrayMatchPush(mainStore.getState().audioCacheStarList, audioCacheUrl)) }
   const unstarUrl = (audioCacheUrl) => { mainStore.setAudioCacheStarList(arrayMatchDelete(mainStore.getState().audioCacheStarList, audioCacheUrl)) }
+  const renderAudioListChunkButton = (mainPanel, audioListFilteredChunkList, audioListChunkIndex) => mainPanel.appendChild(cE(
+    'div',
+    { style: 'flex: 1 1 100%; display: flex; flex-flow: row wrap; align-items: center; justify-content: center;' },
+    audioListFilteredChunkList.map((v, index) => cE('button', {
+      className: index === audioListChunkIndex ? 'select' : '',
+      innerText: `${index * CHUNK_SIZE + 1}`,
+      onclick: () => setAudioListChunkIndex(index)
+    }))
+  ))
 
   // ==================================================================================================================
   // ==================================================================================================================
@@ -268,6 +307,8 @@ const initRender = ({
     createIconButton('cloud_download', { id: 'control-sort-download', onclick: setFilterDownload }),
     createIconButton('star', { id: 'control-sort-star', onclick: setFilterStar }),
     createIconButton('view_list', { id: 'control-sort-time', onclick: setFilterTime }),
+    createIconButton('recent_actors', { id: 'control-sort-filter-author', onclick: setFilterFilterAuthor }),
+    createIconButton('style', { id: 'control-sort-filter-tag', onclick: setFilterFilterTag }),
     createIconButton('search', { id: 'control-sort-filter', onclick: setFilterFilter }),
     createIconButton('', { id: 'control-minimize', onclick: mainStore.toggleAudioListMinimize }),
     createIconButton('arrow_back', { id: 'control-to-audio-list', onclick: switchToAudioList }),
@@ -277,6 +318,8 @@ const initRender = ({
   const setFilterStar = () => setAudioListFilter({ type: 'star' })
   const setFilterDownload = () => setAudioListFilter({ type: 'download' })
   const setFilterTime = () => setAudioListFilter({ type: 'time' })
+  const setFilterFilterAuthor = () => setAudioListFilter({ type: 'filter-author' })
+  const setFilterFilterTag = () => setAudioListFilter({ type: 'filter-tag' })
   const setFilterFilter = lossyAsync(() => asyncRenderModal((resolve) => {
     const setFilter = () => resolve(qS('#filter-input').value)
     setTimeout(() => qS('#filter-input') && qS('#filter-input').focus(), 200)
@@ -314,6 +357,12 @@ const initRender = ({
     qS('#control-sort-time').style.display = styleDisplayAudioList
     qS('#control-sort-time').disabled = audioListFilter.type === 'time'
     mECN(qS('#control-sort-time'), audioListFilter.type === 'time', 'select')
+    qS('#control-sort-filter-author').style.display = styleDisplayAudioList
+    qS('#control-sort-filter-author').disabled = audioListFilter.type === 'filter-author'
+    mECN(qS('#control-sort-filter-author'), audioListFilter.type === 'filter-author', 'select')
+    qS('#control-sort-filter-tag').style.display = styleDisplayAudioList
+    qS('#control-sort-filter-tag').disabled = audioListFilter.type === 'filter-tag'
+    mECN(qS('#control-sort-filter-tag'), audioListFilter.type === 'filter-tag', 'select')
     qS('#control-sort-filter').style.display = styleDisplayAudioList
     mECN(qS('#control-sort-filter'), audioListFilter.type === 'filter', 'select')
     qS('#control-minimize').innerHTML = isAudioListMinimize ? 'flip_to_back' : 'flip_to_front'
